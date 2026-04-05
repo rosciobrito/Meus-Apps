@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner de Inventário - UFMA</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        h1 { font-size: 1.5em; text-align: center; color: #333; }
+        
+        video, canvas { width: 100%; border-radius: 8px; background: #000; margin-bottom: 10px; display: none; }
+        
+        .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
+        .btn {
+            flex: 1; min-width: 140px; padding: 15px; border: none; border-radius: 8px;
+            font-size: 1em; font-weight: bold; cursor: pointer; color: white; text-align: center; display: inline-block; box-sizing: border-box;
+            transition: opacity 0.2s;
+        }
+        .btn:active { opacity: 0.8; }
+        .btn-camera { background-color: #0056b3; } /* Azul escuro */
+        .btn-upload { background-color: #6c757d; }
+        .btn-capture { background-color: #28a745; display: none; width: 100%; margin-bottom: 10px; }
+        .btn-save { background-color: #17a2b8; display: none; width: 100%; margin-top: 15px; }
+        
+        .paste-area {
+            border: 2px dashed #0056b3; border-radius: 8px; padding: 20px; text-align: center;
+            color: #444; background-color: #e9f2fb; margin-bottom: 20px; font-size: 0.95em;
+        }
+        
+        #result { background: #fff; padding: 15px; border-radius: 8px; margin-top: 20px; display: none; overflow-x: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        #loading { text-align: center; font-weight: bold; color: #ff9800; display: none; margin: 15px 0; }
+        #statusMsg { text-align: center; font-weight: bold; margin: 15px 0; display: none; padding: 15px; border-radius: 8px; }
+        
+        /* Oculta o input de arquivo padrão */
+        input[type="file"] { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>Scanner de Inventário</h1>
+
+    <div class="paste-area" id="pasteArea">
+        📸 <b>Dica:</b> Você pode dar <b>Ctrl+V</b> aqui para colar uma foto direto do WhatsApp Web ou da área de transferência!
+    </div>
+
+    <div class="action-buttons" id="mainActions">
+        <button id="btnStart" class="btn btn-camera" onclick="startCamera()">Abrir Câmera</button>
+        <label for="fileInput" class="btn btn-upload">Enviar Arquivo</label>
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(event)">
+    </div>
+
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display: none;"></canvas>
+
+    <button id="btnCapture" class="btn btn-capture" onclick="takePhoto()">Capturar Etiqueta</button>
+
+    <div id="loading">🤖 Analisando etiqueta... Por favor, aguarde.</div>
+    <div id="statusMsg"></div>
+
+    <div id="result"></div>
+    <button id="btnSave" class="btn btn-save" onclick="sendToSheet()">Salvar no Google Sheets</button>
+
+    <script>
+        // ==========================================
+        // ⚙️ CONFIGURAÇÕES EMBUTIDAS
+        // ==========================================
+        
+        const GEMINI_API_KEY = "AIzaSyC-7wARH_NtFscl8wE1jytGm_8Pf8Oo0SY";
+        
+        // Substitua o texto abaixo pela URL do seu Google Apps Script (que você mostrou no print)
+        const SCRIPT_URL = "COLE_SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI";
+        
+        // ==========================================
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const btnStart = document.getElementById('btnStart');
+        const btnCapture = document.getElementById('btnCapture');
+        const btnSave = document.getElementById('btnSave');
+        const resultDiv = document.getElementById('result');
+        const loadingDiv = document.getElementById('loading');
+        const statusMsg = document.getElementById('statusMsg');
+        let stream;
+        let currentExtractedData = {};
+
+        const geminiPrompt = `Você é um assistente especializado em inventário e OCR técnico. Sua única função é analisar fotos de etiquetas de embalagens de eletrônicos e extrair dados estruturados.
+
+Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório e responder DIRETAMENTE com uma Tabela Markdown contendo os dados abaixo.
+
+**Regras de Extração:**
+1. **Tipo de Dispositivo:** Infira (Smartphone, Tablet, Roteador) se não estiver explícito.
+2. **Marca:** Identifique o fabricante.
+3. **Modelo:** Combine o Nome Comercial e o Código Técnico (ex: XT2245-1).
+4. **IMEI:** Liste todos (separe por barras se houver dois).
+5. **Número de Série:** Procure por S/N, MSN, SN.
+6. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa). Ignore manuais e ferramentas se quiser brevidade, ou inclua se for inventário completo.
+
+**Formato de Resposta (Sempre em Tabela):**
+
+| Campo | Dados Extraídos |
+| :--- | :--- |
+| **Tipo** | ... |
+| **Marca** | ... |
+| **Modelo** | ... |
+| **IMEI** | ... |
+| **Nº Série** | ... |
+| **Acessórios** | ... |
+
+Se algum dado não estiver visível, preencha com "N/A".`;
+
+        // --- 1. FUNÇÕES DE CÂMERA ---
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                video.style.display = 'block';
+                video.srcObject = stream;
+                btnStart.style.display = 'none';
+                btnCapture.style.display = 'block';
+                resetUI();
+            } catch (err) {
+                alert("Erro ao acessar a câmera: " + err.message);
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.style.display = 'none';
+                btnCapture.style.display = 'none';
+                btnStart.style.display = 'block';
+            }
+        }
+
+        function takePhoto() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
+            stopCamera();
+            processImageBase64(base64Image);
+        }
+
+        // --- 2. FUNÇÕES DE UPLOAD E COLA (PASTE) ---
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                stopCamera();
+                readFileAsBase64(file);
+            }
+        }
+
+        document.addEventListener('paste', function(event) {
+            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+            for (let index in items) {
+                const item = items[index];
+                if (item.kind === 'file' && item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    stopCamera();
+                    readFileAsBase64(file);
+                    break; 
+                }
+            }
+        });
+
+        function readFileAsBase64(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const base64Image = e.target.result.split(',')[1];
+                processImageBase64(base64Image);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // --- 3. PROCESSAMENTO CENTRAL (GEMINI) ---
+        function resetUI() {
+            statusMsg.style.display = 'none';
+            resultDiv.style.display = 'none';
+            btnSave.style.display = 'none';
+            loadingDiv.style.display = 'none';
+        }
+
+        async function processImageBase64(base64Image) {
+            resetUI();
+            loadingDiv.style.display = 'block';
+
+            // Usando o modelo atualizado gemini-2.5-flash
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+            const payload = {
+                contents: [{
+                    parts: [
+                        { text: geminiPrompt },
+                        { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+                    ]
+                }]
+            };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+
+                const markdownText = data.candidates[0].content.parts[0].text;
+                resultDiv.innerHTML = marked.parse(markdownText);
+                extractDataFromTable();
+
+                loadingDiv.style.display = 'none';
+                resultDiv.style.display = 'block';
+                btnSave.style.display = 'block';
+                
+                document.getElementById('fileInput').value = "";
+
+            } catch (err) {
+                alert("Erro na API do Gemini: " + err.message);
+                loadingDiv.style.display = 'none';
+            }
+        }
+
+        // --- 4. FUNÇÕES DE PLANILHA ---
+        function extractDataFromTable() {
+            const rows = resultDiv.querySelectorAll('tr');
+            currentExtractedData = { tipo: "", marca: "", modelo: "", imei: "", sn: "", acessorios: "" };
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td, th');
+                if (cells.length === 2) {
+                    const key = cells[0].textContent.toLowerCase().trim();
+                    const val = cells[1].textContent.trim();
+
+                    if (key.includes('tipo')) currentExtractedData.tipo = val;
+                    else if (key.includes('marca')) currentExtractedData.marca = val;
+                    else if (key.includes('modelo')) currentExtractedData.modelo = val;
+                    else if (key.includes('imei')) currentExtractedData.imei = val;
+                    else if (key.includes('série') || key.includes('serie') || key.includes('sn')) currentExtractedData.sn = val;
+                    else if (key.includes('acessórios') || key.includes('acessorios')) currentExtractedData.acessorios = val;
+                }
+            });
+        }
+
+        async function sendToSheet() {
+            if (SCRIPT_URL === "COLE_SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI" || SCRIPT_URL === "") {
+                alert("Atenção: Você esqueceu de colocar a URL do Google Apps Script no código HTML!");
+                return;
+            }
+
+            btnSave.disabled = true;
+            btnSave.textContent = "Enviando...";
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(currentExtractedData),
+                    mode: 'no-cors', 
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                statusMsg.innerHTML = "✅ Salvo com sucesso no Google Sheets!<br><small>Pode capturar o próximo aparelho.</small>";
+                statusMsg.style.backgroundColor = "#d4edda";
+                statusMsg.style.color = "#155724";
+                statusMsg.style.display = "block";
+                resultDiv.style.display = "none";
+                btnSave.style.display = "none";
+                
+                // Oculta a mensagem de sucesso após alguns segundos
+                setTimeout(() => { statusMsg.style.display = "none"; }, 4000);
+
+            } catch (err) {
+                alert("Erro ao enviar. Verifique a internet e a URL configurada.");
+            } finally {
+                btnSave.disabled = false;
+                btnSave.textContent = "Salvar no Google Sheets";
+            }
+        }
+    </script>
+</body>
+</html>
