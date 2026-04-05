@@ -78,7 +78,30 @@
         let stream;
         let currentExtractedData = {};
 
-        const geminiPrompt = `Analise a etiqueta da foto e extraia em Tabela Markdown: Tipo, Marca, Modelo, IMEI, Nº Série, Acessórios. Se não ver, use N/A.`;
+        const geminiPrompt = `Você é um assistente especializado em inventário e OCR técnico. Sua única função é analisar fotos de etiquetas de embalagens de eletrônicos e extrair dados estruturados.
+
+Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório e responder DIRETAMENTE com uma Tabela Markdown contendo os dados abaixo.
+
+**Regras de Extração:**
+1. **Tipo de Dispositivo:** Infira (Smartphone, Tablet, Roteador) se não estiver explícito.
+2. **Marca:** Identifique o fabricante.
+3. **Modelo:** Combine o Nome Comercial e o Código Técnico (ex: XT2245-1).
+4. **IMEI:** Liste todos (separe por barras se houver dois).
+5. **Número de Série:** Procure por S/N, MSN, SN.
+6. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa). Ignore manuais e ferramentas se quiser brevidade, ou inclua se for inventário completo.
+
+**Formato de Resposta (Sempre em Tabela):**
+
+| Campo | Dados Extraídos |
+| :--- | :--- |
+| **Tipo** | ... |
+| **Marca** | ... |
+| **Modelo** | ... |
+| **IMEI** | ... |
+| **Nº Série** | ... |
+| **Acessórios** | ... |
+
+Se algum dado não estiver visível, preencha com "N/A".`;
 
         async function startCamera() {
             try {
@@ -118,7 +141,7 @@
             if (!apiKey) { alert("Por favor, insira a chave da API no topo da página."); return; }
             resetUI(); loadingDiv.style.display = 'block';
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             try {
                 const res = await fetch(url, {
                     method: 'POST',
