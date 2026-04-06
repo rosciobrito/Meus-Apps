@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extrator de Dados de Faturas PDF</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .main-container { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 800px; width: 100%; text-align: center; }
+        h1 { color: #4a4a4a; margin-bottom: 25px; }
+        
+        /* Estilo da caixa de configuração baseado no captura_etiquetas.html */
+        .config-box { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #ffc107; text-align: left; }
+        input[type="password"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        
+        #drop-zone { border: 2px dashed #007bff; border-radius: 10px; padding: 40px; cursor: pointer; transition: background-color 0.3s, border-color 0.3s; }
+        #drop-zone p { margin: 0; font-size: 18px; color: #666; }
+        #drop-zone.dragover { background-color: #e9f5ff; border-color: #0056b3; }
+        #pdf-input { display: none; }
+        #file-name { margin-top: 15px; font-style: italic; color: #333; font-weight: bold; }
+        button { padding: 12px 25px; font-size: 18px; color: white; background-color: #28a745; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; transition: background-color 0.3s; width: 100%; }
+        button:hover { background-color: #218838; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        .status { text-align: center; margin-top: 20px; font-size: 16px; color: #0056b3; height: 25px; font-weight: 500; }
+        .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #3498db; width: 20px; height: 20px; -webkit-animation: spin 2s linear infinite; animation: spin 2s linear infinite; display: none; margin: 10px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <h1>Extrator de Dados de Fatura 📄➡️📊</h1>
+
+        <div class="config-box" id="configKeyArea">
+            <label><b>Chave da API Gemini:</b></label>
+            <input type="password" id="api_key_input" placeholder="Cole sua chave Gemini aqui..." onchange="saveKey()">
+            <small style="color: #666;">A chave fica salva apenas neste celular/PC.</small>
+        </div>
+
+        <div id="drop-zone">
+            <p>Arraste e solte o PDF da fatura aqui, ou clique para selecionar</p>
+            <input type="file" id="pdf-input" accept=".pdf">
+            <p id="file-name"></p>
+        </div>
+        <button id="process-btn" disabled>Extrair Dados e Gerar CSV</button>
+        <div class="status" id="status-message"></div>
+        <div class="loader" id="loader"></div>
+    </div>
+
+    <script>
+        // Recupera a chave salva no navegador ao abrir
+        document.getElementById('api_key_input').value = localStorage.getItem('gemini_key') || '';
+
+        function saveKey() {
+            const key = document.getElementById('api_key_input').value;
+            localStorage.setItem('gemini_key', key);
+            alert("Chave salva localmente!");
+        }
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js`;
+
+        const dropZone = document.getElementById('drop-zone');
+        const pdfInput = document.getElementById('pdf-input');
+        const fileNameDisplay = document.getElementById('file-name');
+        const processBtn = document.getElementById('process-btn');
+        const statusMessage = document.getElementById('status-message');
+        const loader = document.getElementById('loader');
+        
+        let selectedFile = null;
+
+        dropZone.addEventListener('click', () => pdfInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') { handleFile(files[0]); }
+        });
+
+        pdfInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) { handleFile(e.target.files[0]); }
+        });
+        
+        function handleFile(file) {
+            selectedFile = file;
+            fileNameDisplay.textContent = `Arquivo selecionado: ${file.name}`;
+            processBtn.disabled = false;
+        }
+
+        processBtn.addEventListener('click', async () => {
+            const apiKey = localStorage.getItem('gemini_key');
+            if (!apiKey) {
+                alert('Por favor, insira a chave da API no topo da página.');
+                return;
+            }
+            if (!selectedFile) return;
+
+            setLoading(true, '1/3 - Lendo e processando o PDF...');
+            try {
+                const imageParts = await pdfToImageParts(selectedFile);
+                setLoading(true, '2/3 - Extraindo dados com a IA...');
+                const csvData = await extractDataWithGemini(imageParts, apiKey);
+                setLoading(true, '3/3 - Gerando arquivo CSV...');
+                downloadCSV(csvData, `fatura_${selectedFile.name.replace('.pdf', '')}.csv`);
+                setLoading(false, 'Processo concluído com sucesso! ✅');
+            } catch (error) {
+                console.error(error);
+                setLoading(false, `Erro: ${error.message}`);
+            }
+        });
+        
+        function setLoading(isLoading, message = '') {
+            processBtn.disabled = isLoading;
+            statusMessage.textContent = message;
+            loader.style.display = isLoading ? 'block' : 'none';
+        }
+
+        async function pdfToImageParts(file) {
+            const fileReader = new FileReader();
+            return new Promise((resolve, reject) => {
+                fileReader.onload = async (event) => {
+                    try {
+                        const typedarray = new Uint8Array(event.target.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        const imageParts = [];
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const viewport = page.getViewport({ scale: 1.5 });
+                            const canvas = document.createElement('canvas');
+                            const context = canvas.getContext('2d');
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+                            await page.render({ canvasContext: context, viewport: viewport }).promise;
+                            const base64ImageData = canvas.toDataURL('image/jpeg').split(',')[1];
+                            imageParts.push({ inline_data: { mime_type: 'image/jpeg', data: base64ImageData } });
+                        }
+                        resolve(imageParts);
+                    } catch (error) { reject(error); }
+                };
+                fileReader.readAsArrayBuffer(file);
+            });
+        }
+        
+        async function extractDataWithGemini(imageParts, apiKey) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            const prompt = `Você é um assistente especialista em extração de dados financeiros. Analise as imagens da fatura de telefonia fixa. Extraia os lançamentos. Responda APENAS o CSV, separado por ":" sem explicações ou blocos de código. Cabeçalho: "Data; Origem; Destino; TAG; Status; Dur.(s); Tarif.(s)`;
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, ...imageParts ] }] })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error?.message || "Erro na API");
+            }
+
+            const data = await response.json();
+            return data.candidates[0].content.parts[0].text.replace(/```csv|```/g, "").trim();
+        }
+
+        function downloadCSV(csvContent, filename) {
+            const bom = "\uFEFF"; 
+            const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.click();
+        }
+    </script>
+</body>
+</html>
