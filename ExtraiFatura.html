@@ -9,6 +9,11 @@
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f9; color: #333; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .main-container { background-color: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 800px; width: 100%; text-align: center; }
         h1 { color: #4a4a4a; margin-bottom: 25px; }
+        
+        /* Estilo da caixa de configuração baseado no captura_etiquetas.html */
+        .config-box { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #ffc107; text-align: left; }
+        input[type="password"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        
         #drop-zone { border: 2px dashed #007bff; border-radius: 10px; padding: 40px; cursor: pointer; transition: background-color 0.3s, border-color 0.3s; }
         #drop-zone p { margin: 0; font-size: 18px; color: #666; }
         #drop-zone.dragover { background-color: #e9f5ff; border-color: #0056b3; }
@@ -19,13 +24,19 @@
         button:disabled { background-color: #cccccc; cursor: not-allowed; }
         .status { text-align: center; margin-top: 20px; font-size: 16px; color: #0056b3; height: 25px; font-weight: 500; }
         .loader { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #3498db; width: 20px; height: 20px; -webkit-animation: spin 2s linear infinite; animation: spin 2s linear infinite; display: none; margin: 10px auto; }
-        @-webkit-keyframes spin { 0% { -webkit-transform: rotate(0deg); } 100% { -webkit-transform: rotate(360deg); } }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="main-container">
         <h1>Extrator de Dados de Fatura 📄➡️📊</h1>
+
+        <div class="config-box" id="configKeyArea">
+            <label><b>Chave da API Gemini:</b></label>
+            <input type="password" id="api_key_input" placeholder="Cole sua chave Gemini aqui..." onchange="saveKey()">
+            <small style="color: #666;">A chave fica salva apenas neste celular/PC.</small>
+        </div>
+
         <div id="drop-zone">
             <p>Arraste e solte o PDF da fatura aqui, ou clique para selecionar</p>
             <input type="file" id="pdf-input" accept=".pdf">
@@ -37,12 +48,15 @@
     </div>
 
     <script>
-        // --- CONFIGURAÇÃO DA CHAVE DE API ---
-        // ⚠️ IMPORTANTE: Substitua pela sua própria chave de API do Gemini
-        const GEMINI_API_KEY = 'AIzaSyDeYXiaTqVQ0_QmdT3z8oEu1j5Z848bfCM'; 
-        // ------------------------------------
+        // Recupera a chave salva no navegador ao abrir
+        document.getElementById('api_key_input').value = localStorage.getItem('gemini_key') || '';
 
-        // Configuração do worker para a biblioteca pdf.js
+        function saveKey() {
+            const key = document.getElementById('api_key_input').value;
+            localStorage.setItem('gemini_key', key);
+            alert("Chave salva localmente!");
+        }
+
         pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js`;
 
         const dropZone = document.getElementById('drop-zone');
@@ -54,34 +68,18 @@
         
         let selectedFile = null;
 
-        // --- LÓGICA DE UPLOAD (DRAG & DROP E CLIQUE) ---
         dropZone.addEventListener('click', () => pdfInput.click());
-
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
-        });
-
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
-
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('dragover'); });
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('dragover');
             const files = e.dataTransfer.files;
-            if (files.length > 0 && files[0].type === 'application/pdf') {
-                handleFile(files[0]);
-            } else {
-                alert('Por favor, envie apenas arquivos PDF.');
-            }
+            if (files.length > 0 && files[0].type === 'application/pdf') { handleFile(files[0]); }
         });
 
         pdfInput.addEventListener('change', (e) => {
-            const files = e.target.files;
-            if (files.length > 0) {
-                handleFile(files[0]);
-            }
+            if (e.target.files.length > 0) { handleFile(e.target.files[0]); }
         });
         
         function handleFile(file) {
@@ -91,25 +89,23 @@
         }
 
         processBtn.addEventListener('click', async () => {
-            if (!selectedFile) {
-                alert('Nenhum arquivo selecionado!');
+            const apiKey = localStorage.getItem('gemini_key');
+            if (!apiKey) {
+                alert('Por favor, insira a chave da API no topo da página.');
                 return;
             }
-            if (GEMINI_API_KEY === 'SUA_CHAVE_DE_API_GEMINI_AQUI') {
-                alert('Por favor, insira sua chave de API do Gemini no código.');
-                return;
-            }
+            if (!selectedFile) return;
 
             setLoading(true, '1/3 - Lendo e processando o PDF...');
             try {
                 const imageParts = await pdfToImageParts(selectedFile);
-                setLoading(true, '2/3 - Extraindo dados com a IA (pode levar um momento)...');
-                const csvData = await extractDataWithGemini(imageParts);
+                setLoading(true, '2/3 - Extraindo dados com a IA...');
+                const csvData = await extractDataWithGemini(imageParts, apiKey);
                 setLoading(true, '3/3 - Gerando arquivo CSV...');
                 downloadCSV(csvData, `fatura_${selectedFile.name.replace('.pdf', '')}.csv`);
                 setLoading(false, 'Processo concluído com sucesso! ✅');
             } catch (error) {
-                console.error('Ocorreu um erro:', error);
+                console.error(error);
                 setLoading(false, `Erro: ${error.message}`);
             }
         });
@@ -120,7 +116,6 @@
             loader.style.display = isLoading ? 'block' : 'none';
         }
 
-        // --- FUNÇÕES DE PROCESSAMENTO DO PDF ---
         async function pdfToImageParts(file) {
             const fileReader = new FileReader();
             return new Promise((resolve, reject) => {
@@ -129,7 +124,6 @@
                         const typedarray = new Uint8Array(event.target.result);
                         const pdf = await pdfjsLib.getDocument(typedarray).promise;
                         const imageParts = [];
-
                         for (let i = 1; i <= pdf.numPages; i++) {
                             const page = await pdf.getPage(i);
                             const viewport = page.getViewport({ scale: 1.5 });
@@ -137,98 +131,44 @@
                             const context = canvas.getContext('2d');
                             canvas.height = viewport.height;
                             canvas.width = viewport.width;
-
                             await page.render({ canvasContext: context, viewport: viewport }).promise;
-                            
-                            // Converte o canvas para Base64 e extrai apenas os dados
                             const base64ImageData = canvas.toDataURL('image/jpeg').split(',')[1];
-                            
-                            imageParts.push({
-                                inline_data: {
-                                    mime_type: 'image/jpeg',
-                                    data: base64ImageData
-                                }
-                            });
+                            imageParts.push({ inline_data: { mime_type: 'image/jpeg', data: base64ImageData } });
                         }
                         resolve(imageParts);
-                    } catch (error) {
-                        reject(error);
-                    }
+                    } catch (error) { reject(error); }
                 };
-                fileReader.onerror = reject;
                 fileReader.readAsArrayBuffer(file);
             });
         }
         
-        // --- FUNÇÃO DE CHAMADA À API GEMINI ---
-        async function extractDataWithGemini(imageParts) {
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-			
-
-            // O prompt é a parte mais importante. Ele precisa ser muito claro.
-            const prompt = `
-                Você é um assistente especialista em extração de dados financeiros de faturas de cartão de crédito.
-                Analise as imagens da fatura fornecidas. Sua tarefa é extrair APENAS os lançamentos (compras e pagamentos).
-                Ignore qualquer outra informação como gráficos, limites de crédito, resumos, ou propagandas.
-                
-                Sua resposta DEVE ser APENAS uma string no formato CSV, sem nenhuma outra explicação, texto introdutório ou blocos de código markdown (como \`\`\`csv ... \`\`\`).
-                A primeira linha da sua resposta DEVE ser o seguinte cabeçalho:
-                "Data do lançamento,Vencimento,Estabelecimento,Valor,Cartao (final),Numero da parcela,Qtt de parcela"
-                
-                Para cada lançamento, preencha as colunas da seguinte forma:
-                - Data do lançamento: A data em que a compra ocorreu (formato DD/MM/AAAA).
-                - Vencimento: A data de vencimento da fatura. Esta data será a mesma para todos os lançamentos da mesma fatura.
-                - Estabelecimento: O nome do local da compra.
-                - Valor: O valor da compra em formato numérico, usando ponto como separador decimal (ex: 123.45). Para valores de crédito (pagamentos, estornos), use um sinal negativo (ex: -1500.00).
-                - Cartao (final): Os 4 últimos dígitos do cartão usado.
-                - Numero da parcela: Se for uma compra parcelada (ex: "2/12"), coloque o número da parcela atual (neste caso, "2"). Se for uma compra à vista, coloque "1".
-                - Qtt de parcela: Se for uma compra parcelada (ex: "2/12"), coloque a quantidade total de parcelas (neste caso, "12"). Se for uma compra à vista, coloque "1".
-
-                Extraia todos os lançamentos que encontrar nas imagens e formate-os seguindo estritamente estas regras.
-            `;
-
-            const requestBody = {
-                contents: [{
-                    parts: [
-                        { text: prompt },
-                        ...imageParts 
-                    ]
-                }]
-            };
+        async function extractDataWithGemini(imageParts, apiKey) {
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const prompt = `Você é um assistente especialista em extração de dados financeiros. Analise as imagens da fatura. Extraia os lançamentos. Responda APENAS o CSV, sem explicações ou blocos de código. Cabeçalho: "Data do lançamento,Vencimento,Estabelecimento,Valor,Cartao (final),Numero da parcela,Qtt de parcela"`;
 
             const response = await fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(requestBody)
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, ...imageParts ] }] })
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(`Erro da API: ${errorData.error?.message || response.statusText}`);
+                throw new Error(errorData.error?.message || "Erro na API");
             }
 
             const data = await response.json();
-            // Extrai o texto da resposta da API
-            const csvContent = data.candidates[0].content.parts[0].text;
-            return csvContent;
+            return data.candidates[0].content.parts[0].text.replace(/```csv|```/g, "").trim();
         }
 
-        // --- FUNÇÃO PARA GERAR E BAIXAR O CSV ---
         function downloadCSV(csvContent, filename) {
-            // Adiciona o BOM para garantir a correta interpretação de caracteres especiais no Excel
             const bom = "\uFEFF"; 
             const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
-            
-            if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute('href', url);
-                link.setAttribute('download', filename);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.click();
         }
     </script>
 </body>
