@@ -143,7 +143,7 @@
         }
         
         async function extractDataWithGemini(imageParts, apiKey) {
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
             const prompt = `Você é um assistente especialista em extração de dados financeiros. Analise as imagens da fatura. Extraia os lançamentos. Responda APENAS o CSV, sem explicações ou blocos de código. Cabeçalho: "Data do lançamento,Vencimento,Estabelecimento,Valor,Cartao (final),Numero da parcela,Qtt de parcela"`;
 
             const response = await fetch(apiUrl, {
