@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR de Imagem para Português</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #1c1e21;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
+            text-align: center;
+        }
+        h1 {
+            color: #1877f2;
+            margin-bottom: 0.5rem;
+        }
+        p {
+            color: #606770;
+            margin-bottom: 2rem;
+        }
+        #drop-area {
+            border: 3px dashed #ccd0d5;
+            border-radius: 8px;
+            padding: 40px 20px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+        #drop-area.highlight {
+            background-color: #e7f3ff;
+            border-color: #1877f2;
+        }
+        #file-input {
+            display: none;
+        }
+        #image-display {
+            margin-top: 2rem;
+            max-width: 100%;
+        }
+        #image-display img {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 4px;
+            border: 1px solid #dddfe2;
+        }
+        #result-container {
+            margin-top: 2rem;
+            text-align: left;
+        }
+        h2 {
+            color: #1c1e21;
+            border-bottom: 1px solid #dddfe2;
+            padding-bottom: 0.5rem;
+        }
+        #output {
+            background-color: #f0f2f5;
+            border-radius: 4px;
+            padding: 1rem;
+            min-height: 100px;
+            white-space: pre-wrap; /* Mantém as quebras de linha dos parágrafos */
+            word-wrap: break-word;
+            color: #333;
+            font-size: 1rem;
+            line-height: 1.6;
+        }
+        #status {
+            margin-top: 1rem;
+            font-weight: bold;
+            color: #1877f2;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>OCR de Imagem para Português</h1>
+        <p>Arraste, cole ou selecione uma imagem para extrair e formatar o texto.</p>
+
+        <div id="drop-area">
+            <p><strong>Arraste e solte uma imagem aqui</strong><br>ou clique para selecionar um arquivo.<br>Você também pode colar uma imagem da área de transferência (Ctrl+V).</p>
+            <input type="file" id="file-input" accept="image/*">
+        </div>
+
+        <div id="status">Processando imagem... Por favor, aguarde.</div>
+
+        <div id="image-display"></div>
+
+        <div id="result-container" style="display: none;">
+            <h2>Texto Corrigido</h2>
+            <pre id="output"></pre>
+        </div>
+    </div>
+
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+
+    <script>
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('file-input');
+        const imageDisplay = document.getElementById('image-display');
+        const resultContainer = document.getElementById('result-container');
+        const output = document.getElementById('output');
+        const status = document.getElementById('status');
+
+        // Previne comportamentos padrão do navegador
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        // Adiciona destaque à área de drop
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.add('highlight'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.remove('highlight'), false);
+        });
+
+        // Manipula os arquivos soltos
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        // Abre o seletor de arquivos ao clicar
+        dropArea.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+        // Manipula o evento de colar imagem
+        window.addEventListener('paste', handlePaste);
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        function handlePaste(e) {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let file = null;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    file = items[i].getAsFile();
+                    break;
+                }
+            }
+            if (file) {
+                handleFiles([file]);
+            }
+        }
+
+        function handleFiles(files) {
+            const file = files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imageDisplay.innerHTML = `<img src="${e.target.result}" alt="Imagem selecionada">`;
+                    resultContainer.style.display = 'none';
+                    performOCR(e.target.result);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                alert('Por favor, selecione um arquivo de imagem válido.');
+            }
+        }
+
+        /**
+         * Função que limpa o texto extraído, removendo quebras de linha desnecessárias.
+         */
+        function cleanText(rawText) {
+            if (!rawText) return '';
+
+            // 1. Remove quebras de linha no meio de frases.
+            // Procura por uma letra minúscula, um hífen opcional, uma quebra de linha,
+            // e outra letra minúscula. Substitui por um espaço.
+            // Inclui caracteres acentuados do português (à-ú).
+            let processedText = rawText.replace(/([a-zà-ú,;-])\n([a-zà-ú])/g, '$1 $2');
+
+            // 2. Remove hífens que conectam palavras quebradas entre linhas.
+            // Ex: "palav-\nra" se torna "palavra".
+            processedText = processedText.replace(/-\n/g, '');
+
+            // 3. Normaliza múltiplos espaços em um único espaço.
+            processedText = processedText.replace(/ +/g, ' ');
+
+            return processedText.trim();
+        }
+
+        async function performOCR(image) {
+            status.style.display = 'block';
+            output.textContent = 'Reconhecendo texto...';
+
+            try {
+                const { data: { text } } = await Tesseract.recognize(
+                    image,
+                    'por', // Especifica o idioma português
+                    {
+                        logger: m => {
+                            console.log(m);
+                            if (m.status === 'recognizing text') {
+                                status.textContent = `Processando... (${Math.round(m.progress * 100)}%)`;
+                            }
+                        }
+                    }
+                );
+
+                // **NOVA ETAPA: Limpa o texto antes de exibi-lo**
+                const cleanedText = cleanText(text);
+
+                output.textContent = cleanedText || 'Nenhum texto encontrado.';
+                resultContainer.style.display = 'block';
+
+            } catch (error) {
+                console.error('Erro durante o OCR:', error);
+                output.textContent = 'Ocorreu um erro ao tentar extrair o texto. Verifique o console para mais detalhes.';
+            } finally {
+                status.style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html>

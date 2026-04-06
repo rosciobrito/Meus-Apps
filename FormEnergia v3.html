@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Registro de Consumo de Energia</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f1f5f9;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 40px;
+    }
+    .container {
+      background-color: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 600px;
+    }
+    h2 {
+      color: #1e3a8a;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-top: 15px;
+      font-weight: bold;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+    textarea {
+      resize: vertical;
+      height: 80px;
+    }
+    .button {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .btn-primary {
+      background-color: #1d4ed8;
+      color: white;
+    }
+    .btn-secondary {
+      background-color: #cbd5e1;
+      color: #1e293b;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 30px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f3f4f6;
+    }
+    td button {
+      margin-right: 5px;
+      padding: 4px 8px;
+    }
+
+    #modal-editar {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(0,0,0,0.4);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    #modal-editar .modal-content {
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 400px;
+    }
+
+    #modal-editar label {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Registro de Consumo de Energia</h2>
+    <label for="data">Data da Leitura:</label>
+    <input type="date" id="data" />
+
+    <label for="hora">Hora da Leitura:</label>
+    <input type="time" id="hora" />
+
+    <label for="leitura">Leitura do Medidor (kWh):</label>
+    <input type="number" id="leitura" placeholder="Ex: 350" />
+
+    <label for="aparelhos">Aparelhos Elétricos Utilizados desde a Última Leitura:</label>
+    <textarea id="aparelhos" placeholder="Ex: Geladeira, Ar condicionado - 2h, Máquina de lavar - 1 ciclo"></textarea>
+
+    <button class="button btn-primary" onclick="registrarLeitura()">Registrar Leitura</button>
+    <button class="button btn-secondary" onclick="baixarCSV()">Baixar CSV</button>
+    <button class="button btn-secondary" onclick="baixarXLSX()">Baixar XLSX</button>
+
+    <div id="tabela-container"></div>
+  </div>
+
+  <!-- Modal de Edição -->
+  <div id="modal-editar">
+    <div class="modal-content">
+      <h3>Editar Leitura</h3>
+      <input type="hidden" id="editar-index">
+      <label>Data:</label>
+      <input type="date" id="editar-data">
+      <label>Hora:</label>
+      <input type="time" id="editar-hora">
+      <label>Leitura (kWh):</label>
+      <input type="number" id="editar-leitura">
+      <label>Aparelhos:</label>
+      <textarea id="editar-aparelhos"></textarea>
+      <button class="button btn-primary" onclick="salvarEdicao()">Salvar</button>
+      <button class="button btn-secondary" onclick="fecharModal()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- SheetJS para exportar XLSX -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+  <script>
+    function registrarLeitura() {
+      const data = document.getElementById("data").value;
+      const hora = document.getElementById("hora").value;
+      const leitura = document.getElementById("leitura").value;
+      const aparelhos = document.getElementById("aparelhos").value;
+
+      if (!data || !hora || !leitura) {
+        alert("Preencha todos os campos obrigatórios!");
+        return;
+      }
+
+      const registro = { data, hora, leitura, aparelhos };
+      const registros = JSON.parse(localStorage.getItem("leituras")) || [];
+      registros.push(registro);
+      localStorage.setItem("leituras", JSON.stringify(registros));
+
+      document.getElementById("data").value = "";
+      document.getElementById("hora").value = "";
+      document.getElementById("leitura").value = "";
+      document.getElementById("aparelhos").value = "";
+
+      atualizarTabela();
+    }
+
+    function atualizarTabela() {
+      const registros = JSON.parse(localStorage.getItem("leituras")) || [];
+      const container = document.getElementById("tabela-container");
+
+      if (registros.length === 0) {
+        container.innerHTML = "<p>Nenhuma leitura registrada.</p>";
+        return;
+      }
+
+      let html = `<table>
+        <tr>
+          <th>Data</th>
+          <th>Hora</th>
+          <th>Leitura (kWh)</th>
+          <th>Aparelhos</th>
+          <th>Ações</th>
+        </tr>`;
+
+      registros.forEach((item, index) => {
+        html += `<tr>
+          <td>${item.data}</td>
+          <td>${item.hora}</td>
+          <td>${item.leitura}</td>
+          <td>${item.aparelhos}</td>
+          <td>
+            <button onclick="editarRegistro(${index})">Editar</button>
+            <button onclick="excluirRegistro(${index})">Excluir</button>
+          </td>
+        </tr>`;
+      });
+
+      html += "</table>";
+      container.innerHTML = html;
+    }
+
+    function editarRegistro(index) {
+      const registros = JSON.parse(localStorage.getItem("leituras")) || [];
+      const r = registros[index];
+
+      document.getElementById("editar-index").value = index;
+      document.getElementById("editar-data").value = r.data;
+      document.getElementById("editar-hora").value = r.hora;
+      document.getElementById("editar-leitura").value = r.leitura;
+      document.getElementById("editar-aparelhos").value = r.aparelhos;
+
+      document.getElementById("modal-editar").style.display = "flex";
+    }
+
+    function fecharModal() {
+      document.getElementById("modal-editar").style.display = "none";
+    }
+
+    function salvarEdicao() {
+      const index = document.getElementById("editar-index").value;
+      const data = document.getElementById("editar-data").value;
+      const hora = document.getElementById("editar-hora").value;
+      const leitura = document.getElementById("editar-leitura").value;
+      const aparelhos = document.getElementById("editar-aparelhos").value;
+
+      const registros = JSON.parse(localStorage.getItem("leituras")) || [];
+      registros[index] = { data, hora, leitura, aparelhos };
+      localStorage.setItem("leituras", JSON.stringify(registros));
+
+      fecharModal();
+      atualizarTabela();
+    }
+
+    function excluirRegistro(index) {
+      if (!confirm("Tem certeza que deseja excluir este registro?")) return;
+      const registros = JSON.parse(localStorage.getItem("leituras")) || [];
+      registros.splice(index, 1);
+      localStorage.setItem("leituras", JSON.stringify(registros));
+      atualizarTabela();
+    }
+
+    function baixarCSV() {
+      const registros = JSON.parse(localStorage.getItem("leituras")) || [];
+      if (registros.length === 0) return alert("Nenhuma leitura registrada.");
+
+      let csvContent = "Data,Hora,Leitura (kWh),Aparelhos Utilizados\n";
+      registros.forEach(item => {
+        csvContent += `${item.data},${item.hora},${item.leitura},"${item.aparelhos.replace(/"/g, '""')}"\n`;
+      });
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "leituras.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function baixarXLSX() {
+      const registros = JSON.parse(localStorage.getItem("leituras")) || [];
+      if (registros.length === 0) return alert("Nenhuma leitura registrada.");
+
+      const worksheet = XLSX.utils.json_to_sheet(registros);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Leituras");
+
+      XLSX.writeFile(workbook, "leituras.xlsx");
+    }
+
+    window.onload = atualizarTabela;
+  </script>
+</body>
+</html>
