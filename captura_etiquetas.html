@@ -9,7 +9,13 @@
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f9; }
         h1 { font-size: 1.5em; text-align: center; color: #333; }
         .config-box { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #ffc107; }
+        .config-box label { display: block; margin-top: 10px; }
+        .config-box label:first-child { margin-top: 0; }
         input[type="password"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        .config-toggle { text-align: center; margin-bottom: 15px; }
+        .config-toggle button { background: none; border: 1px solid #ccc; border-radius: 20px; padding: 8px 16px; cursor: pointer; font-size: 0.85em; color: #555; }
+        .config-toggle button:hover { background: #f0f0f0; }
+        .config-box.collapsed { display: none; }
         video, canvas { width: 100%; border-radius: 8px; background: #000; margin-bottom: 10px; display: none; }
         .action-buttons { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; }
         .btn { flex: 1; min-width: 140px; padding: 15px; border: none; border-radius: 8px; font-size: 1em; font-weight: bold; cursor: pointer; color: white; text-align: center; }
@@ -31,10 +37,21 @@
 
     <h1>Scanner de Inventário</h1>
 
-    <div class="config-box" id="configKeyArea">
-        <label><b>Chave da API Gemini:</b></label>
-        <input type="password" id="api_key_input" placeholder="Cole sua nova chave aqui..." onchange="saveKey()">
-        <small style="color: #666;">A chave fica salva apenas neste celular/PC.</small>
+    <div class="config-toggle">
+        <button onclick="toggleConfig()">⚙️ Configurações</button>
+    </div>
+
+    <div class="config-box collapsed" id="configKeyArea">
+        <label><b>🔑 Chave da API Gemini:</b></label>
+        <input type="password" id="api_key_input" placeholder="Cole sua chave Gemini aqui..." onchange="saveConfig()">
+
+        <label><b>🔗 URL do Google Apps Script:</b></label>
+        <input type="password" id="script_url_input" placeholder="Cole a URL do seu Apps Script aqui..." onchange="saveConfig()">
+
+        <label><b>🛡️ Token Secreto (opcional):</b></label>
+        <input type="password" id="secret_token_input" placeholder="Um código secreto para validar envios..." onchange="saveConfig()">
+
+        <small style="color: #666; display: block; margin-top: 10px;">Tudo fica salvo apenas neste celular/PC. Nada vai para o código-fonte.</small>
     </div>
 
     <div class="paste-area">📸 <b>Ctrl+V</b> para colar imagem</div>
@@ -55,16 +72,30 @@
     <button id="btnSave" class="btn btn-save" onclick="sendToSheet()">Salvar no Google Sheets</button>
 
     <script>
-        // CONFIGURAÇÕES
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxcqSft5BBDMvNatGJXmP2OoSVSiO5VMUzcIV2yaykgbvtwTwXlqF2vvnnrCL0Y_gp5/exec"; // MANTENHA A SUA URL AQUI
-        
-        // Recupera a chave salva no navegador ao abrir
-        document.getElementById('api_key_input').value = localStorage.getItem('gemini_key') || '';
+        // =============================================
+        // CONFIGURAÇÕES — Tudo via localStorage
+        // Nenhuma credencial ou URL fica no código-fonte
+        // =============================================
 
-        function saveKey() {
-            const key = document.getElementById('api_key_input').value;
-            localStorage.setItem('gemini_key', key);
-            alert("Chave salva localmente!");
+        // Recupera configurações salvas no navegador ao abrir
+        document.getElementById('api_key_input').value = localStorage.getItem('gemini_key') || '';
+        document.getElementById('script_url_input').value = localStorage.getItem('script_url') || '';
+        document.getElementById('secret_token_input').value = localStorage.getItem('secret_token') || '';
+
+        function toggleConfig() {
+            const box = document.getElementById('configKeyArea');
+            box.classList.toggle('collapsed');
+        }
+
+        // Mostra o painel se ainda não foi configurado
+        if (!localStorage.getItem('gemini_key') || !localStorage.getItem('script_url')) {
+            document.getElementById('configKeyArea').classList.remove('collapsed');
+        }
+
+        function saveConfig() {
+            localStorage.setItem('gemini_key', document.getElementById('api_key_input').value);
+            localStorage.setItem('script_url', document.getElementById('script_url_input').value);
+            localStorage.setItem('secret_token', document.getElementById('secret_token_input').value);
         }
 
         const video = document.getElementById('video');
@@ -138,14 +169,18 @@ Se algum dado não estiver visível, preencha com "N/A".`;
 
         async function processImageBase64(base64) {
             const apiKey = localStorage.getItem('gemini_key');
-            if (!apiKey) { alert("Por favor, insira a chave da API no topo da página."); return; }
+            if (!apiKey) { alert("Configure a chave API em ⚙️ Configurações."); return; }
             resetUI(); loadingDiv.style.display = 'block';
 
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            // API key vai no HEADER (não na URL) — mais seguro
+            const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
             try {
                 const res = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': apiKey
+                    },
                     body: JSON.stringify({ contents: [{ parts: [{ text: geminiPrompt }, { inline_data: { mime_type: "image/jpeg", data: base64 } }] }] })
                 });
                 const data = await res.json();
@@ -175,9 +210,15 @@ Se algum dado não estiver visível, preencha com "N/A".`;
         }
 
         async function sendToSheet() {
+            const scriptUrl = localStorage.getItem('script_url');
+            if (!scriptUrl) { alert("Configure a URL do Apps Script em ⚙️ Configurações."); return; }
+
+            const token = localStorage.getItem('secret_token') || '';
+            const payload = { ...currentExtractedData, _token: token };
+
             btnSave.disabled = true; btnSave.textContent = "Enviando...";
             try {
-                await fetch(SCRIPT_URL, { method: 'POST', body: JSON.stringify(currentExtractedData), mode: 'no-cors' });
+                await fetch(scriptUrl, { method: 'POST', body: JSON.stringify(payload), mode: 'no-cors' });
                 statusMsg.innerHTML = "✅ Salvo na Planilha!"; statusMsg.style.backgroundColor = "#d4edda"; statusMsg.style.display = "block";
                 resultDiv.style.display = "none"; btnSave.style.display = "none";
             } catch (err) { alert("Erro ao enviar."); }
