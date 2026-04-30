@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leitor de ICCID - Completo v2</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; padding: 20px; text-align: center; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h1 { color: #333; font-size: 1.5rem; }
+        
+        /* Área de Resultado */
+        .result-box { margin-top: 20px; padding: 15px; background-color: #e8f5e9; border: 2px solid #4caf50; border-radius: 8px; display: none; text-align: left; }
+        .result-group { margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+        .result-group:last-child { border-bottom: none; }
+        
+        .result-label { font-size: 0.8rem; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;}
+        .result-value { font-size: 1.4rem; font-weight: bold; color: #333; word-break: break-word; }
+        
+        /* Cores Específicas */
+        #nome-result { color: #1565c0; }     /* Azul */
+        #tipo-result { color: #6a1b9a; }     /* Roxo */
+        #franquia-result { color: #e65100; } /* Laranja (NOVO) */
+        #phone-result { color: #2e7d32; }    /* Verde */
+        
+        #reader { width: 100%; margin-top: 20px; }
+        input[type="file"] { margin-bottom: 20px; }
+        
+        /* Botões */
+        .btn-reset { margin-top: 10px; padding: 12px 20px; background-color: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; width: 100%; }
+        
+        .whatsapp-button {
+            background-color: #25D366; 
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+            display: none; 
+            align-items: center;
+            justify-content: center;
+        }
+        .whatsapp-button:hover { background-color: #1ebd54; }
+        .whatsapp-button::before { content: "📱 "; font-size: 1.2rem; margin-right: 8px; }
+
+        .filter-status { font-size: 0.8rem; color: #888; margin-top: 5px; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Scanner de Romaneio</h1>
+    
+    <div id="upload-area">
+        <p>1. Selecione o arquivo <b>romaneio.csv</b>:</p>
+        <p style="font-size: 0.8rem; color: #666;">Colunas: ICCID, Telefone, Nome, Tipo, Franquia</p>
+        <input type="file" id="csvFileInput" accept=".csv" />
+    </div>
+
+    <div id="scanner-container" style="display:none;">
+        <p>2. Aponte para o ICCID:</p>
+        <div id="reader"></div>
+        <p class="filter-status">🔎 Filtrando por prefixo 89 ou 85...</p>
+    </div>
+
+    <div id="result" class="result-box">
+        <div class="result-label">ICCID LIDO: <span id="iccid-found" style="font-weight: normal; color: #333;">...</span></div>
+        <hr>
+        
+        <div class="result-group">
+            <div class="result-label">NOME:</div>
+            <div id="nome-result" class="result-value">---</div>
+        </div>
+
+        <div class="result-group">
+            <div class="result-label">TIPO / PLANO:</div>
+            <div id="tipo-result" class="result-value">---</div>
+        </div>
+
+        <div class="result-group">
+            <div class="result-label">FRANQUIA:</div>
+            <div id="franquia-result" class="result-value">---</div>
+        </div>
+
+        <div class="result-group">
+            <div class="result-label">TELEFONE:</div>
+            <div id="phone-result" class="result-value">---</div>
+        </div>
+
+        <button id="btn-whatsapp" class="whatsapp-button" onclick="compartilharWhatsApp()">
+            Compartilhar no WhatsApp
+        </button>
+
+        <button class="btn-reset" onclick="restartScanner()">Escanear Outro</button>
+    </div>
+</div>
+
+<script>
+    let database = {}; 
+    let html5QrcodeScanner = null; 
+
+    // 1. Carregamento do CSV
+    document.getElementById('csvFileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: function(results) {
+                database = {};
+                let count = 0;
+
+                results.data.forEach(row => {
+                    if(row.ICCID && row.Telefone) {
+                        let key = limparString(row.ICCID.toString());
+                        database[key] = {
+                            telefone: row.Telefone.toString().trim(),
+                            nome: row.Nome ? row.Nome.toString().trim() : "Sem Nome",
+                            tipo: row.Tipo ? row.Tipo.toString().trim() : "---",
+                            // Nova coluna Franquia
+                            franquia: row.Franquia ? row.Franquia.toString().trim() : "---"
+                        };
+                        count++;
+                    }
+                });
+                
+                if(count > 0) {
+                    alert(`Sucesso! ${count} registros carregados.`);
+                    document.getElementById('upload-area').style.display = 'none';
+                    iniciarScanner();
+                } else {
+                    alert("Erro: CSV vazio ou colunas incorretas.");
+                }
+            },
+            error: function() { alert("Erro ao ler CSV."); }
+        });
+    });
+
+    function limparString(txt) {
+        return txt.replace(/[^0-9]/g, ""); 
+    }
+
+    function ehICCIDValido(texto) {
+        const numeros = limparString(texto);
+        if (numeros.length < 19 || numeros.length > 22) return false;
+        if (numeros.startsWith("89") || numeros.startsWith("85")) return true;
+        return false;
+    }
+
+    // 2. Scanner
+    function iniciarScanner() {
+        document.getElementById('scanner-container').style.display = 'block';
+        if(html5QrcodeScanner) return; 
+
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", 
+            { fps: 10, qrbox: {width: 250, height: 100}, aspectratio: 1.0 }
+        );
+        
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+        const textoLimpo = limparString(decodedText);
+
+        if (!ehICCIDValido(textoLimpo)) return;
+
+        html5QrcodeScanner.clear().then(() => {
+            html5QrcodeScanner = null; 
+            
+            const registro = database[textoLimpo]; 
+
+            document.getElementById('scanner-container').style.display = 'none';
+            document.getElementById('result').style.display = 'block';
+            document.getElementById('iccid-found').innerText = textoLimpo;
+
+            // Elementos HTML
+            const phoneDisplay = document.getElementById('phone-result');
+            const nomeDisplay = document.getElementById('nome-result');
+            const tipoDisplay = document.getElementById('tipo-result');
+            const franquiaDisplay = document.getElementById('franquia-result'); // NOVO
+            const btnWhatsapp = document.getElementById('btn-whatsapp');
+
+            if (registro) {
+                // Preencher valores
+                phoneDisplay.innerText = registro.telefone;
+                nomeDisplay.innerText = registro.nome;
+                tipoDisplay.innerText = registro.tipo;
+                franquiaDisplay.innerText = registro.franquia; // NOVO
+
+                phoneDisplay.style.color = "#2e7d32"; 
+                
+                // MOSTRAR botão do WhatsApp
+                btnWhatsapp.style.display = 'flex';
+
+                if(navigator.vibrate) navigator.vibrate(200); 
+            } else {
+                phoneDisplay.innerText = "NÃO ENCONTRADO";
+                nomeDisplay.innerText = "---";
+                tipoDisplay.innerText = "---";
+                franquiaDisplay.innerText = "---";
+                phoneDisplay.style.color = "#d32f2f";
+                
+                btnWhatsapp.style.display = 'none';
+
+                if(navigator.vibrate) navigator.vibrate([100, 50, 100]); 
+            }
+        }).catch((err) => console.error(err));
+    }
+
+    function onScanFailure(error) {}
+
+    function restartScanner() {
+        document.getElementById('result').style.display = 'none';
+        iniciarScanner();
+    }
+
+    // 3. Compartilhamento (Atualizado com Franquia)
+    function compartilharWhatsApp() {
+        const nome = document.getElementById('nome-result').innerText;
+        const tipo = document.getElementById('tipo-result').innerText;
+        const franquia = document.getElementById('franquia-result').innerText;
+        const tel = document.getElementById('phone-result').innerText;
+        const iccid = document.getElementById('iccid-found').innerText;
+
+        // Adicionei a linha Franquia na mensagem
+        const mensagem = `*Dados do Romaneio*\n\n👤 *Nome:* ${nome}\n📋 *Plano:* ${tipo}\n📊 *Franquia:* ${franquia}\n📞 *Telefone:* ${tel}\n🔢 *ICCID:* ${iccid}`;
+
+        const url = "https://wa.me/?text=" + encodeURIComponent(mensagem);
+        window.open(url, '_blank');
+    }
+</script>
+
+</body>
+</html>
