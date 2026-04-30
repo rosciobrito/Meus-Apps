@@ -6,7 +6,7 @@
     <title>Meu Portal de Apps</title>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
-    
+
     <style>
         :root {
             --bg-color: #0f172a;
@@ -15,11 +15,12 @@
             --accent-color: #38bdf8;
             --text-main: #f8fafc;
             --text-dim: #94a3b8;
+            --danger: #ef4444;
         }
 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            margin: 0;
-            padding: 0;
             font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
             background-image: radial-gradient(circle at top right, #1e293b, #0f172a);
@@ -27,35 +28,34 @@
             min-height: 100vh;
         }
 
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
+        .container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
 
-        header {
-            text-align: center;
-            margin-bottom: 50px;
-        }
+        header { text-align: center; margin-bottom: 50px; }
+        header h1 { font-size: 2.5rem; letter-spacing: -1px; margin-bottom: 10px; }
+        header p { color: var(--text-dim); }
 
-        header h1 {
-            font-size: 2.5rem;
-            letter-spacing: -1px;
-            margin-bottom: 10px;
+        /* Toolbar */
+        .toolbar {
+            display: flex; justify-content: center; gap: 10px;
+            margin-bottom: 30px; flex-wrap: wrap;
         }
-
-        header p {
-            color: var(--text-dim);
+        .toolbar button {
+            background: var(--card-bg); border: 1px solid rgba(255,255,255,0.15);
+            color: var(--text-main); padding: 10px 20px; border-radius: 12px;
+            font-family: 'Inter', sans-serif; font-size: 0.9em; cursor: pointer;
+            transition: all 0.2s; display: flex; align-items: center; gap: 6px;
         }
+        .toolbar button:hover { background: var(--card-hover); border-color: var(--accent-color); }
+        .toolbar button.active { background: rgba(56,189,248,0.15); border-color: var(--accent-color); }
 
-        /* Grid de Mini Apps */
+        /* Grid */
         .app-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 20px;
         }
 
-        /* Estilo do Card */
+        /* Card */
         .app-card {
             background: var(--card-bg);
             backdrop-filter: blur(10px);
@@ -70,35 +70,119 @@
             flex-direction: column;
             align-items: center;
             gap: 12px;
+            position: relative;
+            cursor: pointer;
         }
-
         .app-card:hover {
             transform: translateY(-5px);
             background: var(--card-hover);
             border-color: var(--accent-color);
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         }
+        .app-card i { font-size: 40px; color: var(--accent-color); }
+        .app-card span { font-weight: 600; font-size: 1.1rem; }
+        .app-card small { color: var(--text-dim); font-size: 0.85rem; }
 
-        .app-card i {
-            font-size: 40px;
-            color: var(--accent-color);
+        /* Botões de edição no card */
+        .card-actions {
+            display: none; position: absolute; top: 8px; right: 8px;
+            gap: 4px;
         }
-
-        .app-card span {
-            font-weight: 600;
-            font-size: 1.1rem;
+        .edit-mode .card-actions { display: flex; }
+        .edit-mode .app-card { cursor: grab; }
+        .edit-mode .app-card:hover { transform: none; }
+        .card-actions button {
+            width: 28px; height: 28px; border-radius: 8px; border: none;
+            font-size: 14px; cursor: pointer; display: flex;
+            align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.1); color: var(--text-dim);
+            transition: all 0.2s;
         }
+        .card-actions .btn-edit:hover { background: var(--accent-color); color: #fff; }
+        .card-actions .btn-delete:hover { background: var(--danger); color: #fff; }
 
-        .app-card small {
+        /* Card de adicionar */
+        .add-card {
+            background: transparent;
+            border: 2px dashed rgba(255,255,255,0.15);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
             color: var(--text-dim);
-            font-size: 0.85rem;
+            min-height: 140px;
         }
+        .edit-mode .add-card { display: flex; }
+        .add-card:hover {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+            background: rgba(56,189,248,0.05);
+        }
+        .add-card i { font-size: 36px; }
 
-        /* Responsividade */
+        /* Drag & Drop */
+        .app-card.dragging { opacity: 0.4; transform: scale(0.95); }
+        .app-card.drag-over { border-color: var(--accent-color); border-style: dashed; }
+
+        /* Modal */
+        .modal-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+            z-index: 100; align-items: center; justify-content: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal {
+            background: #1e293b; border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px; padding: 28px; width: 90%; max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal h2 { font-size: 1.2em; margin-bottom: 20px; }
+        .modal label { display: block; font-size: 0.85em; color: var(--text-dim); margin-top: 14px; font-weight: 600; }
+        .modal label:first-of-type { margin-top: 0; }
+        .modal input, .modal select {
+            width: 100%; padding: 10px 12px; margin-top: 5px;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 8px; color: var(--text-main);
+            font-family: 'Inter', sans-serif; font-size: 0.95em;
+        }
+        .modal input:focus, .modal select:focus {
+            outline: none; border-color: var(--accent-color);
+            box-shadow: 0 0 0 2px rgba(56,189,248,0.2);
+        }
+        .modal select option { background: #1e293b; }
+        .modal-buttons {
+            display: flex; gap: 10px; margin-top: 24px;
+        }
+        .modal-buttons button {
+            flex: 1; padding: 12px; border: none; border-radius: 10px;
+            font-family: 'Inter', sans-serif; font-size: 0.95em;
+            font-weight: 600; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-primary { background: var(--accent-color); color: #0f172a; }
+        .btn-primary:hover { background: #7dd3fc; }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: var(--text-main); }
+        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+
+        /* Icon picker */
+        .icon-picker { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; max-height: 120px; overflow-y: auto; }
+        .icon-option {
+            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            border-radius: 10px; border: 2px solid transparent; cursor: pointer;
+            font-size: 22px; color: var(--text-dim); transition: all 0.2s;
+            background: rgba(255,255,255,0.05);
+        }
+        .icon-option:hover { border-color: rgba(255,255,255,0.3); color: var(--text-main); }
+        .icon-option.selected { border-color: var(--accent-color); color: var(--accent-color); background: rgba(56,189,248,0.1); }
+
         @media (max-width: 600px) {
-            .app-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
+            .app-grid { grid-template-columns: repeat(2, 1fr); }
+            header h1 { font-size: 1.8rem; }
         }
     </style>
 </head>
@@ -110,46 +194,231 @@
             <p>Selecione uma ferramenta abaixo para iniciar</p>
         </header>
 
-        <div class="app-grid">
-            
-            <a href="captura_etiquetas.html" class="app-card">
-                <i class="ph ph-scan"></i>
-                <span>OCR Inventário</span>
-                <small>Captura de etiquetas</small>
-            </a>
+        <div class="toolbar">
+            <button id="btnEdit" onclick="toggleEditMode()">
+                <i class="ph ph-pencil-simple"></i> Editar Portal
+            </button>
+        </div>
 
-            <a href="OCR.html" class="app-card">
-                <i class="ph ph-gear-six"></i>
-                <span>OCR</span>
-                <small>Reconhecimento ótico</small>
-            </a>
-
-            <a href="ExtraiFatura.html" class="app-card">
-                <i class="ph ph-notebook"></i>
-                <span>ExtraiFatura</span>
-                <small>Notas rápidas</small>
-            </a>
-			
-			<a href="FormEnergia.html" class="app-card">
-                <i class="ph ph-notebook"></i>
-                <span>Regitro de consumo de Energia Eletrica</span>
-                <small>Notas rápidas</small>
-            </a>
-
-            <a href="ExtraiFatura-FIXA.html" class="app-card">
-                <i class="ph ph-notebook"></i>
-                <span>ExtraiFatura-FIXA</span>
-                <small>Notas rápidas</small>
-            </a>
-
-            <a href="Leitor_ICCID-CHIP.html" class="app-card">
-                <i class="ph ph-notebook"></i>
-                <span>Leitor ICCID CHIP</span>
-                <small>Ler o ICCID do CHIP e retorna o cadastro</small>
-            </a>
-
-            </div>
+        <div class="app-grid" id="appGrid"></div>
     </div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+        <div class="modal">
+            <h2 id="modalTitle">Adicionar Aplicativo</h2>
+
+            <label>Nome do App</label>
+            <input type="text" id="inputName" placeholder="Ex: OCR Inventário">
+
+            <label>Descrição curta</label>
+            <input type="text" id="inputDesc" placeholder="Ex: Captura de etiquetas">
+
+            <label>Link (URL ou arquivo .html)</label>
+            <input type="text" id="inputUrl" placeholder="Ex: captura_etiquetas.html">
+
+            <label>Ícone</label>
+            <div class="icon-picker" id="iconPicker"></div>
+
+            <div class="modal-buttons">
+                <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+                <button class="btn-primary" id="btnModalSave" onclick="saveApp()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === DADOS ===
+        const STORAGE_KEY = 'portal_apps';
+        const ICONS = [
+            'scan','gear-six','notebook','lightning','file-text','chart-line','camera',
+            'clipboard-text','database','globe','envelope','chat-dots','code','terminal',
+            'calculator','calendar','map-pin','shopping-cart','users','shield-check',
+            'cloud-arrow-up','wifi-high','cpu','hard-drives','device-mobile','printer',
+            'qr-code','barcode','magnifying-glass','wrench','funnel','export',
+            'file-pdf','file-xls','file-csv','image','video-camera','music-note',
+            'heart-beat','first-aid','truck','factory','student','graduation-cap'
+        ];
+        let editMode = false;
+        let editingIndex = -1;
+        let dragIndex = -1;
+
+        // Apps padrão (migrados do HTML estático original)
+        const DEFAULT_APPS = [
+            { name: "OCR Inventário", desc: "Captura de etiquetas", url: "captura_etiquetas.html", icon: "scan" },
+            { name: "OCR", desc: "Reconhecimento ótico", url: "OCR.html", icon: "gear-six" },
+            { name: "ExtraiFatura", desc: "Notas rápidas", url: "ExtraiFatura.html", icon: "notebook" },
+            { name: "Registro de Energia", desc: "Consumo de Energia Elétrica", url: "FormEnergia.html", icon: "lightning" },
+            { name: "ExtraiFatura-FIXA", desc: "Notas rápidas", url: "ExtraiFatura-FIXA.html", icon: "notebook" },
+            { name: "Leitor ICCID CHIP", desc: "Ler ICCID e retorna cadastro", url: "Leitor_ICCID-CHIP.html", icon: "qr-code" }
+        ];
+
+        function getApps() {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_APPS));
+                return [...DEFAULT_APPS];
+            }
+            return JSON.parse(stored);
+        }
+
+        function saveApps(apps) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(apps));
+        }
+
+        // === RENDERIZAÇÃO ===
+        function render() {
+            const apps = getApps();
+            const grid = document.getElementById('appGrid');
+            grid.innerHTML = '';
+
+            apps.forEach((app, i) => {
+                const card = document.createElement('a');
+                card.className = 'app-card';
+                card.href = editMode ? 'javascript:void(0)' : app.url;
+                card.draggable = editMode;
+                card.dataset.index = i;
+                card.innerHTML = `
+                    <div class="card-actions">
+                        <button class="btn-edit" onclick="event.preventDefault();editApp(${i})" title="Editar">✏️</button>
+                        <button class="btn-delete" onclick="event.preventDefault();deleteApp(${i})" title="Excluir">🗑️</button>
+                    </div>
+                    <i class="ph ph-${app.icon}"></i>
+                    <span>${app.name}</span>
+                    <small>${app.desc}</small>
+                `;
+
+                // Drag & Drop
+                if (editMode) {
+                    card.addEventListener('dragstart', e => { dragIndex = i; card.classList.add('dragging'); });
+                    card.addEventListener('dragend', () => { card.classList.remove('dragging'); dragIndex = -1; });
+                    card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
+                    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+                    card.addEventListener('drop', e => {
+                        e.preventDefault(); card.classList.remove('drag-over');
+                        if (dragIndex !== -1 && dragIndex !== i) { reorderApps(dragIndex, i); }
+                    });
+                }
+
+                grid.appendChild(card);
+            });
+
+            // Card de adicionar
+            const addCard = document.createElement('div');
+            addCard.className = 'add-card';
+            addCard.onclick = () => openModal();
+            addCard.innerHTML = '<i class="ph ph-plus-circle"></i><span>Adicionar App</span>';
+            grid.appendChild(addCard);
+
+            // Aplicar classe de edição
+            document.body.classList.toggle('edit-mode', editMode);
+        }
+
+        // === MODO EDIÇÃO ===
+        function toggleEditMode() {
+            editMode = !editMode;
+            const btn = document.getElementById('btnEdit');
+            btn.classList.toggle('active', editMode);
+            btn.innerHTML = editMode
+                ? '<i class="ph ph-check"></i> Concluir'
+                : '<i class="ph ph-pencil-simple"></i> Editar Portal';
+            render();
+        }
+
+        // === MODAL ===
+        function openModal(index = -1) {
+            editingIndex = index;
+            const modal = document.getElementById('modalOverlay');
+            document.getElementById('modalTitle').textContent = index === -1 ? 'Adicionar Aplicativo' : 'Editar Aplicativo';
+
+            if (index >= 0) {
+                const app = getApps()[index];
+                document.getElementById('inputName').value = app.name;
+                document.getElementById('inputDesc').value = app.desc;
+                document.getElementById('inputUrl').value = app.url;
+                renderIconPicker(app.icon);
+            } else {
+                document.getElementById('inputName').value = '';
+                document.getElementById('inputDesc').value = '';
+                document.getElementById('inputUrl').value = '';
+                renderIconPicker('');
+            }
+            modal.classList.add('visible');
+            document.getElementById('inputName').focus();
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('visible');
+            editingIndex = -1;
+        }
+
+        function closeModalOutside(e) {
+            if (e.target === document.getElementById('modalOverlay')) closeModal();
+        }
+
+        function renderIconPicker(selected) {
+            const picker = document.getElementById('iconPicker');
+            picker.innerHTML = ICONS.map(icon =>
+                `<div class="icon-option ${icon === selected ? 'selected' : ''}"
+                      onclick="selectIcon(this, '${icon}')">
+                    <i class="ph ph-${icon}"></i>
+                </div>`
+            ).join('');
+        }
+
+        function selectIcon(el, icon) {
+            document.querySelectorAll('.icon-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+        }
+
+        function getSelectedIcon() {
+            const sel = document.querySelector('.icon-option.selected i');
+            if (!sel) return 'globe';
+            return sel.className.replace('ph ph-', '');
+        }
+
+        // === CRUD ===
+        function saveApp() {
+            const name = document.getElementById('inputName').value.trim();
+            const desc = document.getElementById('inputDesc').value.trim();
+            const url = document.getElementById('inputUrl').value.trim();
+            const icon = getSelectedIcon();
+
+            if (!name || !url) { alert('Nome e Link são obrigatórios.'); return; }
+
+            const apps = getApps();
+            if (editingIndex >= 0) {
+                apps[editingIndex] = { name, desc, url, icon };
+            } else {
+                apps.push({ name, desc, url, icon });
+            }
+            saveApps(apps);
+            closeModal();
+            render();
+        }
+
+        function editApp(index) { openModal(index); }
+
+        function deleteApp(index) {
+            const apps = getApps();
+            if (confirm(`Remover "${apps[index].name}"?`)) {
+                apps.splice(index, 1);
+                saveApps(apps);
+                render();
+            }
+        }
+
+        function reorderApps(from, to) {
+            const apps = getApps();
+            const [moved] = apps.splice(from, 1);
+            apps.splice(to, 0, moved);
+            saveApps(apps);
+            render();
+        }
+
+        // === INIT ===
+        render();
+    </script>
 
 </body>
 </html>
