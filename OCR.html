@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OCR de Imagem para Português</title>
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f0f2f5;
@@ -13,7 +14,6 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            margin: 0;
             padding: 20px;
         }
         .container {
@@ -25,13 +25,14 @@
             padding: 2rem;
             text-align: center;
         }
-        h1 {
-            color: #1877f2;
-            margin-bottom: 0.5rem;
+        h1 { color: #1877f2; margin-bottom: 0.5rem; }
+        .subtitle { color: #606770; margin-bottom: 2rem; }
+        .session-counter {
+            font-size: 0.85em; color: #606770; margin-bottom: 15px;
         }
-        p {
-            color: #606770;
-            margin-bottom: 2rem;
+        .session-counter span {
+            background: #e8f5e9; color: #2e7d32;
+            padding: 3px 10px; border-radius: 12px; font-weight: bold;
         }
         #drop-area {
             border: 3px dashed #ccd0d5;
@@ -44,13 +45,8 @@
             background-color: #e7f3ff;
             border-color: #1877f2;
         }
-        #file-input {
-            display: none;
-        }
-        #image-display {
-            margin-top: 2rem;
-            max-width: 100%;
-        }
+        #file-input { display: none; }
+        #image-display { margin-top: 2rem; max-width: 100%; }
         #image-display img {
             max-width: 100%;
             max-height: 400px;
@@ -60,18 +56,20 @@
         #result-container {
             margin-top: 2rem;
             text-align: left;
+            display: none;
         }
         h2 {
             color: #1c1e21;
             border-bottom: 1px solid #dddfe2;
             padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
         }
         #output {
             background-color: #f0f2f5;
             border-radius: 4px;
             padding: 1rem;
             min-height: 100px;
-            white-space: pre-wrap; /* Mantém as quebras de linha dos parágrafos */
+            white-space: pre-wrap;
             word-wrap: break-word;
             color: #333;
             font-size: 1rem;
@@ -83,13 +81,64 @@
             color: #1877f2;
             display: none;
         }
+        .progress-bar {
+            width: 100%; height: 6px; background: #e0e0e0;
+            border-radius: 3px; margin-top: 8px; display: none; overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%; background: #1877f2; border-radius: 3px;
+            width: 0%; transition: width 0.3s;
+        }
+        .action-bar {
+            display: none; gap: 10px; margin-top: 15px;
+            flex-wrap: wrap; justify-content: center;
+        }
+        .action-bar button {
+            padding: 10px 20px; border: none; border-radius: 8px;
+            font-size: 0.9em; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; color: #fff;
+        }
+        .btn-copy { background: #1877f2; }
+        .btn-copy:hover { background: #166fe5; }
+        .btn-download { background: #42b72a; }
+        .btn-download:hover { background: #36a420; }
+        .btn-clear { background: #e4e6eb; color: #1c1e21; }
+        .btn-clear:hover { background: #d8dadf; }
+
+        /* Histórico */
+        .history-section { margin-top: 25px; text-align: left; }
+        .history-section h3 {
+            font-size: 1em; color: #1c1e21; margin-bottom: 10px;
+            cursor: pointer; padding-bottom: 8px; border-bottom: 1px solid #dddfe2;
+        }
+        .history-item {
+            background: #f0f2f5; padding: 10px 14px; border-radius: 8px;
+            margin-bottom: 8px; display: flex; justify-content: space-between;
+            align-items: center; font-size: 0.9em;
+        }
+        .history-info { flex: 1; }
+        .history-info small { color: #606770; }
+        .history-info div {
+            font-weight: 600; margin-top: 2px;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px;
+        }
+        .history-actions button {
+            padding: 5px 10px; border: none; border-radius: 6px;
+            font-size: 0.8em; cursor: pointer; background: #1877f2; color: #fff;
+        }
+        .btn-history-clear {
+            background: #e4e6eb; color: #1c1e21; padding: 8px;
+            border: none; border-radius: 8px; font-size: 0.85em;
+            cursor: pointer; width: 100%; margin-top: 5px;
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
         <h1>OCR de Imagem para Português</h1>
-        <p>Arraste, cole ou selecione uma imagem para extrair e formatar o texto.</p>
+        <p class="subtitle">Arraste, cole ou selecione uma imagem para extrair e formatar o texto.</p>
+        <div class="session-counter">Sessão: <span id="sessionCount">0</span> extração(ões)</div>
 
         <div id="drop-area">
             <p><strong>Arraste e solte uma imagem aqui</strong><br>ou clique para selecionar um arquivo.<br>Você também pode colar uma imagem da área de transferência (Ctrl+V).</p>
@@ -97,12 +146,24 @@
         </div>
 
         <div id="status">Processando imagem... Por favor, aguarde.</div>
+        <div class="progress-bar" id="progressBar"><div class="progress-bar-fill" id="progressFill"></div></div>
 
         <div id="image-display"></div>
 
-        <div id="result-container" style="display: none;">
+        <div id="result-container">
             <h2>Texto Corrigido</h2>
             <pre id="output"></pre>
+            <div class="action-bar" id="actionBar">
+                <button class="btn-copy" onclick="copyText()">📋 Copiar Texto</button>
+                <button class="btn-download" onclick="downloadText()">💾 Salvar .txt</button>
+                <button class="btn-clear" onclick="clearResult()">🗑️ Limpar</button>
+            </div>
+        </div>
+
+        <div class="history-section" id="historySection" style="display:none;">
+            <h3 onclick="toggleHistory()">📋 Histórico (<span id="historyCount">0</span>)</h3>
+            <div id="historyList"></div>
+            <button class="btn-history-clear" onclick="clearHistory()">🗑️ Limpar Histórico</button>
         </div>
     </div>
 
@@ -115,54 +176,53 @@
         const resultContainer = document.getElementById('result-container');
         const output = document.getElementById('output');
         const status = document.getElementById('status');
+        const progressBar = document.getElementById('progressBar');
+        const progressFill = document.getElementById('progressFill');
+        const actionBar = document.getElementById('actionBar');
+        let sessionCount = 0;
 
-        // Previne comportamentos padrão do navegador
+        // === FEEDBACK SONORO ===
+        function playSuccessSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [523, 659, 784].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.frequency.value = freq; gain.gain.value = 0.15;
+                    osc.start(ctx.currentTime + i * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.15);
+                    osc.stop(ctx.currentTime + i * 0.1 + 0.15);
+                });
+            } catch(e) {}
+        }
+
+        // === DRAG & DROP ===
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropArea.addEventListener(eventName, preventDefaults, false);
             document.body.addEventListener(eventName, preventDefaults, false);
         });
-
-        // Adiciona destaque à área de drop
         ['dragenter', 'dragover'].forEach(eventName => {
             dropArea.addEventListener(eventName, () => dropArea.classList.add('highlight'), false);
         });
-
         ['dragleave', 'drop'].forEach(eventName => {
             dropArea.addEventListener(eventName, () => dropArea.classList.remove('highlight'), false);
         });
-
-        // Manipula os arquivos soltos
         dropArea.addEventListener('drop', handleDrop, false);
-
-        // Abre o seletor de arquivos ao clicar
         dropArea.addEventListener('click', () => fileInput.click());
         fileInput.addEventListener('change', (e) => handleFiles(e.target.files));
-
-        // Manipula o evento de colar imagem
         window.addEventListener('paste', handlePaste);
 
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
 
-        function handleDrop(e) {
-            const dt = e.dataTransfer;
-            const files = dt.files;
-            handleFiles(files);
-        }
+        function handleDrop(e) { handleFiles(e.dataTransfer.files); }
 
         function handlePaste(e) {
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
-            let file = null;
             for (let i = 0; i < items.length; i++) {
                 if (items[i].type.indexOf('image') !== -1) {
-                    file = items[i].getAsFile();
-                    break;
+                    handleFiles([items[i].getAsFile()]); break;
                 }
-            }
-            if (file) {
-                handleFiles([file]);
             }
         }
 
@@ -173,6 +233,7 @@
                 reader.onload = (e) => {
                     imageDisplay.innerHTML = `<img src="${e.target.result}" alt="Imagem selecionada">`;
                     resultContainer.style.display = 'none';
+                    actionBar.style.display = 'none';
                     performOCR(e.target.result);
                 };
                 reader.readAsDataURL(file);
@@ -181,59 +242,141 @@
             }
         }
 
-        /**
-         * Função que limpa o texto extraído, removendo quebras de linha desnecessárias.
-         */
+        // === LIMPEZA DE TEXTO ===
         function cleanText(rawText) {
             if (!rawText) return '';
-
-            // 1. Remove quebras de linha no meio de frases.
-            // Procura por uma letra minúscula, um hífen opcional, uma quebra de linha,
-            // e outra letra minúscula. Substitui por um espaço.
-            // Inclui caracteres acentuados do português (à-ú).
             let processedText = rawText.replace(/([a-zà-ú,;-])\n([a-zà-ú])/g, '$1 $2');
-
-            // 2. Remove hífens que conectam palavras quebradas entre linhas.
-            // Ex: "palav-\nra" se torna "palavra".
             processedText = processedText.replace(/-\n/g, '');
-
-            // 3. Normaliza múltiplos espaços em um único espaço.
             processedText = processedText.replace(/ +/g, ' ');
-
             return processedText.trim();
         }
 
+        // === OCR ===
         async function performOCR(image) {
             status.style.display = 'block';
+            progressBar.style.display = 'block';
+            progressFill.style.width = '0%';
             output.textContent = 'Reconhecendo texto...';
 
             try {
                 const { data: { text } } = await Tesseract.recognize(
-                    image,
-                    'por', // Especifica o idioma português
+                    image, 'por',
                     {
                         logger: m => {
-                            console.log(m);
                             if (m.status === 'recognizing text') {
-                                status.textContent = `Processando... (${Math.round(m.progress * 100)}%)`;
+                                const pct = Math.round(m.progress * 100);
+                                status.textContent = `Processando... (${pct}%)`;
+                                progressFill.style.width = pct + '%';
                             }
                         }
                     }
                 );
 
-                // **NOVA ETAPA: Limpa o texto antes de exibi-lo**
                 const cleanedText = cleanText(text);
-
                 output.textContent = cleanedText || 'Nenhum texto encontrado.';
                 resultContainer.style.display = 'block';
+                actionBar.style.display = 'flex';
+                playSuccessSound();
+
+                sessionCount++;
+                document.getElementById('sessionCount').textContent = sessionCount;
+                addToHistory(cleanedText);
 
             } catch (error) {
                 console.error('Erro durante o OCR:', error);
-                output.textContent = 'Ocorreu um erro ao tentar extrair o texto. Verifique o console para mais detalhes.';
+                output.textContent = 'Ocorreu um erro ao tentar extrair o texto.';
             } finally {
                 status.style.display = 'none';
+                progressBar.style.display = 'none';
             }
         }
+
+        // === AÇÕES DO RESULTADO ===
+        function copyText() {
+            const text = output.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('.btn-copy');
+                btn.textContent = '✅ Copiado!';
+                setTimeout(() => { btn.textContent = '📋 Copiar Texto'; }, 2000);
+            });
+        }
+
+        function downloadText() {
+            const text = output.textContent;
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ocr_${new Date().toISOString().slice(0,10)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function clearResult() {
+            resultContainer.style.display = 'none';
+            actionBar.style.display = 'none';
+            imageDisplay.innerHTML = '';
+            output.textContent = '';
+        }
+
+        // === HISTÓRICO LOCAL ===
+        const HISTORY_KEY = 'ocr_history';
+
+        function getHistory() {
+            try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
+        }
+
+        function addToHistory(text) {
+            if (!text || text === 'Nenhum texto encontrado.') return;
+            const h = getHistory();
+            h.unshift({ text: text.substring(0, 200), full: text, timestamp: new Date().toISOString() });
+            if (h.length > 30) h.length = 30;
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(h));
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const h = getHistory();
+            const section = document.getElementById('historySection');
+            const list = document.getElementById('historyList');
+            document.getElementById('historyCount').textContent = h.length;
+            if (h.length === 0) { section.style.display = 'none'; return; }
+            section.style.display = 'block';
+            list.innerHTML = h.map((item, i) => {
+                const t = new Date(item.timestamp);
+                const time = t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const date = t.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                const preview = item.text.substring(0, 60) + (item.text.length > 60 ? '...' : '');
+                return `<div class="history-item">
+                    <div class="history-info"><small>${date} ${time}</small><div>${preview}</div></div>
+                    <div class="history-actions"><button onclick="restoreHistory(${i})">📋 Copiar</button></div>
+                </div>`;
+            }).join('');
+        }
+
+        function restoreHistory(index) {
+            const h = getHistory();
+            navigator.clipboard.writeText(h[index].full).then(() => {
+                const btns = document.querySelectorAll('.history-actions button');
+                btns[index].textContent = '✅ Copiado!';
+                setTimeout(() => { btns[index].textContent = '📋 Copiar'; }, 1500);
+            });
+        }
+
+        function toggleHistory() {
+            const list = document.getElementById('historyList');
+            list.style.display = list.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function clearHistory() {
+            if (confirm('Limpar todo o histórico de OCR?')) {
+                localStorage.removeItem(HISTORY_KEY);
+                renderHistory();
+            }
+        }
+
+        // === INIT ===
+        renderHistory();
     </script>
 </body>
 </html>
