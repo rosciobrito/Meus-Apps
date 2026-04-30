@@ -58,18 +58,14 @@
 <div class="container">
     <h1>Scanner de Romaneio</h1>
     
-    <div id="auto-load-status" style="display:none;">
-        <p id="auto-load-msg" style="font-size: 0.9rem; color: #1565c0;">⏳ Buscando romaneio.csv na pasta atual...</p>
-    </div>
-
-    <div id="upload-area" style="display:none;">
-        <p>Selecione o arquivo <b>romaneio.csv</b> manualmente:</p>
+    <div id="upload-area">
+        <p>1. Selecione o arquivo <b>romaneio.csv</b>:</p>
         <p style="font-size: 0.8rem; color: #666;">Colunas: ICCID, Telefone, Nome, Tipo, Franquia</p>
         <input type="file" id="csvFileInput" accept=".csv" />
     </div>
 
     <div id="scanner-container" style="display:none;">
-        <p>Aponte para o ICCID:</p>
+        <p>2. Aponte para o ICCID:</p>
         <div id="reader"></div>
         <p class="filter-status">🔎 Filtrando por prefixo 89 ou 85...</p>
     </div>
@@ -110,71 +106,7 @@
     let database = {}; 
     let html5QrcodeScanner = null; 
 
-    // --- Função auxiliar para processar o conteúdo CSV (texto) ---
-    function processarCSV(csvText, origem) {
-        const results = Papa.parse(csvText, {
-            header: true,
-            skipEmptyLines: true
-        });
-
-        database = {};
-        let count = 0;
-
-        results.data.forEach(row => {
-            if(row.ICCID && row.Telefone) {
-                let key = limparString(row.ICCID.toString());
-                database[key] = {
-                    telefone: row.Telefone.toString().trim(),
-                    nome: row.Nome ? row.Nome.toString().trim() : "Sem Nome",
-                    tipo: row.Tipo ? row.Tipo.toString().trim() : "---",
-                    franquia: row.Franquia ? row.Franquia.toString().trim() : "---"
-                };
-                count++;
-            }
-        });
-
-        if(count > 0) {
-            console.log(`[${origem}] ${count} registros carregados.`);
-            document.getElementById('auto-load-status').style.display = 'none';
-            document.getElementById('upload-area').style.display = 'none';
-            iniciarScanner();
-        } else {
-            return false; // CSV vazio ou colunas erradas
-        }
-        return true;
-    }
-
-    // --- 1. Tentar carregar romaneio.csv automaticamente da pasta atual ---
-    (async function tentarCarregarAutomatico() {
-        const statusDiv = document.getElementById('auto-load-status');
-        const msgEl = document.getElementById('auto-load-msg');
-        statusDiv.style.display = 'block';
-
-        try {
-            const response = await fetch('romaneio.csv');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            
-            const csvText = await response.text();
-            const sucesso = processarCSV(csvText, 'Auto-load');
-
-            if (!sucesso) {
-                throw new Error('CSV vazio ou colunas incorretas');
-            }
-
-            // Sucesso: mostrar mensagem breve e ir para scanner
-            msgEl.textContent = '✅ romaneio.csv carregado automaticamente!';
-            msgEl.style.color = '#2e7d32';
-            setTimeout(() => { statusDiv.style.display = 'none'; }, 2000);
-
-        } catch (err) {
-            console.log('Auto-load falhou:', err.message, '→ exibindo seletor manual.');
-            msgEl.textContent = '⚠️ romaneio.csv não encontrado na pasta. Selecione manualmente:';
-            msgEl.style.color = '#e65100';
-            document.getElementById('upload-area').style.display = 'block';
-        }
-    })();
-
-    // --- 2. Fallback: Carregamento manual do CSV ---
+    // 1. Carregamento do CSV
     document.getElementById('csvFileInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -193,6 +125,7 @@
                             telefone: row.Telefone.toString().trim(),
                             nome: row.Nome ? row.Nome.toString().trim() : "Sem Nome",
                             tipo: row.Tipo ? row.Tipo.toString().trim() : "---",
+                            // Nova coluna Franquia
                             franquia: row.Franquia ? row.Franquia.toString().trim() : "---"
                         };
                         count++;
@@ -201,7 +134,6 @@
                 
                 if(count > 0) {
                     alert(`Sucesso! ${count} registros carregados.`);
-                    document.getElementById('auto-load-status').style.display = 'none';
                     document.getElementById('upload-area').style.display = 'none';
                     iniciarScanner();
                 } else {
@@ -223,7 +155,7 @@
         return false;
     }
 
-    // 3. Scanner
+    // 2. Scanner
     function iniciarScanner() {
         document.getElementById('scanner-container').style.display = 'block';
         if(html5QrcodeScanner) return; 
@@ -254,16 +186,19 @@
             const phoneDisplay = document.getElementById('phone-result');
             const nomeDisplay = document.getElementById('nome-result');
             const tipoDisplay = document.getElementById('tipo-result');
-            const franquiaDisplay = document.getElementById('franquia-result');
+            const franquiaDisplay = document.getElementById('franquia-result'); // NOVO
             const btnWhatsapp = document.getElementById('btn-whatsapp');
 
             if (registro) {
+                // Preencher valores
                 phoneDisplay.innerText = registro.telefone;
                 nomeDisplay.innerText = registro.nome;
                 tipoDisplay.innerText = registro.tipo;
-                franquiaDisplay.innerText = registro.franquia;
+                franquiaDisplay.innerText = registro.franquia; // NOVO
 
                 phoneDisplay.style.color = "#2e7d32"; 
+                
+                // MOSTRAR botão do WhatsApp
                 btnWhatsapp.style.display = 'flex';
 
                 if(navigator.vibrate) navigator.vibrate(200); 
@@ -273,6 +208,7 @@
                 tipoDisplay.innerText = "---";
                 franquiaDisplay.innerText = "---";
                 phoneDisplay.style.color = "#d32f2f";
+                
                 btnWhatsapp.style.display = 'none';
 
                 if(navigator.vibrate) navigator.vibrate([100, 50, 100]); 
@@ -287,7 +223,7 @@
         iniciarScanner();
     }
 
-    // 4. Compartilhamento (com Franquia)
+    // 3. Compartilhamento (Atualizado com Franquia)
     function compartilharWhatsApp() {
         const nome = document.getElementById('nome-result').innerText;
         const tipo = document.getElementById('tipo-result').innerText;
@@ -295,6 +231,7 @@
         const tel = document.getElementById('phone-result').innerText;
         const iccid = document.getElementById('iccid-found').innerText;
 
+        // Adicionei a linha Franquia na mensagem
         const mensagem = `*Dados do Romaneio*\n\n👤 *Nome:* ${nome}\n📋 *Plano:* ${tipo}\n📊 *Franquia:* ${franquia}\n📞 *Telefone:* ${tel}\n🔢 *ICCID:* ${iccid}`;
 
         const url = "https://wa.me/?text=" + encodeURIComponent(mensagem);
