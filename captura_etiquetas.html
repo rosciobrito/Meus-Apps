@@ -6,12 +6,15 @@
     <title>Scanner Inventário UFMA</title>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
+        * { box-sizing: border-box; }
         body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f4f4f9; }
-        h1 { font-size: 1.5em; text-align: center; color: #333; }
+        h1 { font-size: 1.5em; text-align: center; color: #333; margin-bottom: 5px; }
+        .session-counter { text-align: center; font-size: 0.85em; color: #666; margin-bottom: 15px; }
+        .session-counter span { background: #e8f5e9; color: #2e7d32; padding: 3px 10px; border-radius: 12px; font-weight: bold; }
         .config-box { background: #fff; padding: 15px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #ffc107; }
         .config-box label { display: block; margin-top: 10px; }
         .config-box label:first-child { margin-top: 0; }
-        input[type="password"] { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        input[type="password"], input[type="text"] { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         .config-toggle { text-align: center; margin-bottom: 15px; }
         .config-toggle button { background: none; border: 1px solid #ccc; border-radius: 20px; padding: 8px 16px; cursor: pointer; font-size: 0.85em; color: #555; }
         .config-toggle button:hover { background: #f0f0f0; }
@@ -22,20 +25,45 @@
         .btn-camera { background-color: #0056b3; }
         .btn-upload { background-color: #6c757d; }
         .btn-capture { background-color: #28a745; display: none; width: 100%; margin-bottom: 10px; }
-        .btn-save { background-color: #17a2b8; display: none; width: 100%; margin-top: 15px; }
+        .btn-save { background-color: #17a2b8; display: none; width: 100%; margin-top: 10px; }
         .paste-area { border: 2px dashed #0056b3; border-radius: 8px; padding: 15px; text-align: center; background-color: #e9f2fb; margin-bottom: 20px; font-size: 0.9em; }
-        #result { background: #fff; padding: 15px; border-radius: 8px; margin-top: 20px; display: none; overflow-x: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        #result { background: #fff; padding: 15px; border-radius: 8px; margin-top: 15px; display: none; overflow-x: auto; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         table { border-collapse: collapse; width: 100%; font-size: 0.9em; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
         #loading { text-align: center; font-weight: bold; color: #ff9800; display: none; margin: 15px 0; }
         #statusMsg { text-align: center; font-weight: bold; margin: 15px 0; display: none; padding: 15px; border-radius: 8px; }
         input[type="file"] { display: none; }
+        /* Preview da imagem */
+        #imagePreview { display: none; width: 100%; max-height: 250px; object-fit: contain; border-radius: 8px; border: 2px solid #ddd; margin-bottom: 10px; background: #fafafa; }
+        /* Campos editáveis */
+        .edit-form { background: #fff; padding: 15px; border-radius: 8px; margin-top: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: none; }
+        .edit-form h3 { margin: 0 0 12px 0; font-size: 1em; color: #333; }
+        .edit-form label { display: block; font-size: 0.85em; font-weight: bold; color: #555; margin-top: 8px; }
+        .edit-form label:first-of-type { margin-top: 0; }
+        .edit-form input { width: 100%; padding: 8px; margin-top: 3px; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9em; }
+        .edit-form input:focus { border-color: #0056b3; outline: none; box-shadow: 0 0 0 2px rgba(0,86,179,0.15); }
+        /* Histórico */
+        .history-section { margin-top: 25px; }
+        .history-section h3 { font-size: 1em; color: #333; margin-bottom: 10px; cursor: pointer; }
+        .history-item { background: #fff; padding: 12px; border-radius: 8px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 4px solid #ccc; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .history-item.sent { border-left-color: #28a745; }
+        .history-item.pending { border-left-color: #ff9800; }
+        .history-info { flex: 1; min-width: 150px; }
+        .history-info small { color: #888; }
+        .history-info div { font-weight: bold; font-size: 0.9em; margin-top: 2px; }
+        .history-actions button { padding: 6px 12px; border: none; border-radius: 6px; font-size: 0.8em; cursor: pointer; color: #fff; }
+        .btn-resend { background: #ff9800; }
+        .btn-sent-badge { background: #28a745; cursor: default; }
+        .btn-clear { background: #dc3545; padding: 10px; border: none; border-radius: 8px; color: #fff; font-size: 0.85em; cursor: pointer; width: 100%; margin-top: 5px; }
+        .offline-banner { background: #fff3cd; color: #856404; text-align: center; padding: 8px; border-radius: 8px; margin-bottom: 15px; font-size: 0.85em; display: none; }
     </style>
 </head>
 <body>
 
     <h1>Scanner de Inventário</h1>
+    <div class="session-counter">Sessão: <span id="sessionCount">0</span> registro(s)</div>
+    <div class="offline-banner" id="offlineBanner">📡 Sem conexão — dados serão salvos localmente</div>
 
     <div class="config-toggle">
         <button onclick="toggleConfig()">⚙️ Configurações</button>
@@ -44,14 +72,11 @@
     <div class="config-box collapsed" id="configKeyArea">
         <label><b>🔑 Chave da API Gemini:</b></label>
         <input type="password" id="api_key_input" placeholder="Cole sua chave Gemini aqui..." onchange="saveConfig()">
-
         <label><b>🔗 URL do Google Apps Script:</b></label>
         <input type="password" id="script_url_input" placeholder="Cole a URL do seu Apps Script aqui..." onchange="saveConfig()">
-
         <label><b>🛡️ Token Secreto (opcional):</b></label>
-        <input type="password" id="secret_token_input" placeholder="Um código secreto para validar envios..." onchange="saveConfig()">
-
-        <small style="color: #666; display: block; margin-top: 10px;">Tudo fica salvo apenas neste celular/PC. Nada vai para o código-fonte.</small>
+        <input type="password" id="secret_token_input" placeholder="Código secreto para validar envios..." onchange="saveConfig()">
+        <small style="color: #666; display: block; margin-top: 10px;">Tudo fica salvo apenas neste celular/PC.</small>
     </div>
 
     <div class="paste-area">📸 <b>Ctrl+V</b> para colar imagem</div>
@@ -66,38 +91,46 @@
     <canvas id="canvas" style="display: none;"></canvas>
     <button id="btnCapture" class="btn btn-capture" onclick="takePhoto()">Capturar Etiqueta</button>
 
+    <img id="imagePreview" alt="Preview da imagem capturada">
+
     <div id="loading">🤖 Analisando...</div>
     <div id="statusMsg"></div>
     <div id="result"></div>
+
+    <div class="edit-form" id="editForm">
+        <h3>✏️ Confira e corrija os dados antes de salvar:</h3>
+        <label>Tipo</label><input type="text" id="edit_tipo">
+        <label>Marca</label><input type="text" id="edit_marca">
+        <label>Modelo</label><input type="text" id="edit_modelo">
+        <label>IMEI</label><input type="text" id="edit_imei">
+        <label>Nº Série</label><input type="text" id="edit_sn">
+        <label>Acessórios</label><input type="text" id="edit_acessorios">
+    </div>
     <button id="btnSave" class="btn btn-save" onclick="sendToSheet()">Salvar no Google Sheets</button>
 
-    <script>
-        // =============================================
-        // CONFIGURAÇÕES — Tudo via localStorage
-        // Nenhuma credencial ou URL fica no código-fonte
-        // =============================================
+    <div class="history-section" id="historySection" style="display:none;">
+        <h3 onclick="toggleHistory()">📋 Histórico (<span id="historyCount">0</span>)</h3>
+        <div id="historyList"></div>
+        <button class="btn-clear" onclick="clearHistory()">🗑️ Limpar Histórico</button>
+    </div>
 
-        // Recupera configurações salvas no navegador ao abrir
+    <script>
+        // === CONFIGURAÇÕES (localStorage) ===
         document.getElementById('api_key_input').value = localStorage.getItem('gemini_key') || '';
         document.getElementById('script_url_input').value = localStorage.getItem('script_url') || '';
         document.getElementById('secret_token_input').value = localStorage.getItem('secret_token') || '';
 
-        function toggleConfig() {
-            const box = document.getElementById('configKeyArea');
-            box.classList.toggle('collapsed');
-        }
-
-        // Mostra o painel se ainda não foi configurado
+        function toggleConfig() { document.getElementById('configKeyArea').classList.toggle('collapsed'); }
         if (!localStorage.getItem('gemini_key') || !localStorage.getItem('script_url')) {
             document.getElementById('configKeyArea').classList.remove('collapsed');
         }
-
         function saveConfig() {
             localStorage.setItem('gemini_key', document.getElementById('api_key_input').value);
             localStorage.setItem('script_url', document.getElementById('script_url_input').value);
             localStorage.setItem('secret_token', document.getElementById('secret_token_input').value);
         }
 
+        // === ELEMENTOS ===
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const btnStart = document.getElementById('btnStart');
@@ -106,9 +139,42 @@
         const resultDiv = document.getElementById('result');
         const loadingDiv = document.getElementById('loading');
         const statusMsg = document.getElementById('statusMsg');
+        const imagePreview = document.getElementById('imagePreview');
+        const editForm = document.getElementById('editForm');
         let stream;
-        let currentExtractedData = {};
+        let sessionCount = 0;
 
+        // === FEEDBACK SONORO (Web Audio API) ===
+        function playShutterSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value = 880;
+                gain.gain.value = 0.2;
+                osc.start();
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+                osc.stop(ctx.currentTime + 0.12);
+            } catch(e) {}
+        }
+        function playSuccessSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [523, 659, 784].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.frequency.value = freq;
+                    gain.gain.value = 0.15;
+                    osc.start(ctx.currentTime + i * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.15);
+                    osc.stop(ctx.currentTime + i * 0.1 + 0.15);
+                });
+            } catch(e) {}
+        }
+
+        // === PROMPT GEMINI ===
         const geminiPrompt = `Você é um assistente especializado em inventário e OCR técnico. Sua única função é analisar fotos de etiquetas de embalagens de eletrônicos e extrair dados estruturados.
 
 Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório e responder DIRETAMENTE com uma Tabela Markdown contendo os dados abaixo.
@@ -119,7 +185,7 @@ Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório
 3. **Modelo:** Combine o Nome Comercial e o Código Técnico (ex: XT2245-1).
 4. **IMEI:** Liste todos (separe por barras se houver dois).
 5. **Número de Série:** Procure por S/N, MSN, SN.
-6. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa). Ignore manuais e ferramentas se quiser brevidade, ou inclua se for inventário completo.
+6. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa).
 
 **Formato de Resposta (Sempre em Tabela):**
 
@@ -134,6 +200,7 @@ Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório
 
 Se algum dado não estiver visível, preencha com "N/A".`;
 
+        // === CÂMERA ===
         async function startCamera() {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
@@ -146,12 +213,18 @@ Se algum dado não estiver visível, preencha com "N/A".`;
         function takePhoto() {
             canvas.width = video.videoWidth; canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
-            const base64Image = canvas.toDataURL('image/jpeg').split(',')[1];
+            playShutterSound();
+            const dataUrl = canvas.toDataURL('image/jpeg');
+            showPreview(dataUrl);
+            const base64Image = dataUrl.split(',')[1];
             stopCamera(); processImageBase64(base64Image);
         }
 
-        function stopCamera() { if (stream) { stream.getTracks().forEach(t => t.stop()); video.style.display = 'none'; btnCapture.style.display = 'none'; btnStart.style.display = 'block'; } }
+        function stopCamera() {
+            if (stream) { stream.getTracks().forEach(t => t.stop()); video.style.display = 'none'; btnCapture.style.display = 'none'; btnStart.style.display = 'block'; }
+        }
 
+        // === UPLOAD / PASTE ===
         function handleFileUpload(e) { const file = e.target.files[0]; if (file) { stopCamera(); readFileAsBase64(file); } }
 
         document.addEventListener('paste', e => {
@@ -161,69 +234,205 @@ Se algum dado não estiver visível, preencha com "N/A".`;
 
         function readFileAsBase64(file) {
             const reader = new FileReader();
-            reader.onload = e => processImageBase64(e.target.result.split(',')[1]);
+            reader.onload = e => {
+                showPreview(e.target.result);
+                processImageBase64(e.target.result.split(',')[1]);
+            };
             reader.readAsDataURL(file);
         }
 
-        function resetUI() { statusMsg.style.display = 'none'; resultDiv.style.display = 'none'; btnSave.style.display = 'none'; loadingDiv.style.display = 'none'; }
+        // === PREVIEW DA IMAGEM ===
+        function showPreview(dataUrl) {
+            imagePreview.src = dataUrl;
+            imagePreview.style.display = 'block';
+        }
 
+        // === UI ===
+        function resetUI() {
+            statusMsg.style.display = 'none'; resultDiv.style.display = 'none';
+            btnSave.style.display = 'none'; loadingDiv.style.display = 'none';
+            editForm.style.display = 'none'; imagePreview.style.display = 'none';
+        }
+
+        // === PROCESSAMENTO IA ===
         async function processImageBase64(base64) {
             const apiKey = localStorage.getItem('gemini_key');
             if (!apiKey) { alert("Configure a chave API em ⚙️ Configurações."); return; }
-            resetUI(); loadingDiv.style.display = 'block';
+            resetUI(); imagePreview.style.display = 'block'; loadingDiv.style.display = 'block';
 
-            // API key vai no HEADER (não na URL) — mais seguro
             const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
             try {
                 const res = await fetch(url, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-goog-api-key': apiKey
-                    },
+                    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
                     body: JSON.stringify({ contents: [{ parts: [{ text: geminiPrompt }, { inline_data: { mime_type: "image/jpeg", data: base64 } }] }] })
                 });
                 const data = await res.json();
                 if (data.error) throw new Error(data.error.message);
                 const txt = data.candidates[0].content.parts[0].text;
                 resultDiv.innerHTML = marked.parse(txt);
-                extractData();
-                loadingDiv.style.display = 'none'; resultDiv.style.display = 'block'; btnSave.style.display = 'block';
+                extractDataToForm();
+                loadingDiv.style.display = 'none';
+                resultDiv.style.display = 'block';
+                editForm.style.display = 'block';
+                btnSave.style.display = 'block';
             } catch (err) { alert("Erro: " + err.message); loadingDiv.style.display = 'none'; }
         }
 
-        function extractData() {
+        // === EXTRAÇÃO → CAMPOS EDITÁVEIS ===
+        function extractDataToForm() {
             const rows = resultDiv.querySelectorAll('tr');
-            currentExtractedData = { tipo: "", marca: "", modelo: "", imei: "", sn: "", acessorios: "" };
+            const d = { tipo: "", marca: "", modelo: "", imei: "", sn: "", acessorios: "" };
             rows.forEach(r => {
                 const c = r.querySelectorAll('td');
                 if (c.length === 2) {
                     const k = c[0].textContent.toLowerCase(); const v = c[1].textContent.trim();
-                    if (k.includes('tipo')) currentExtractedData.tipo = v;
-                    else if (k.includes('marca')) currentExtractedData.marca = v;
-                    else if (k.includes('modelo')) currentExtractedData.modelo = v;
-                    else if (k.includes('imei')) currentExtractedData.imei = v;
-                    else if (k.includes('série') || k.includes('sn')) currentExtractedData.sn = v;
-                    else if (k.includes('acessórios')) currentExtractedData.acessorios = v;
+                    if (k.includes('tipo')) d.tipo = v;
+                    else if (k.includes('marca')) d.marca = v;
+                    else if (k.includes('modelo')) d.modelo = v;
+                    else if (k.includes('imei')) d.imei = v;
+                    else if (k.includes('série') || k.includes('sn')) d.sn = v;
+                    else if (k.includes('acessórios')) d.acessorios = v;
                 }
             });
+            document.getElementById('edit_tipo').value = d.tipo;
+            document.getElementById('edit_marca').value = d.marca;
+            document.getElementById('edit_modelo').value = d.modelo;
+            document.getElementById('edit_imei').value = d.imei;
+            document.getElementById('edit_sn').value = d.sn;
+            document.getElementById('edit_acessorios').value = d.acessorios;
         }
 
+        function getFormData() {
+            return {
+                tipo: document.getElementById('edit_tipo').value,
+                marca: document.getElementById('edit_marca').value,
+                modelo: document.getElementById('edit_modelo').value,
+                imei: document.getElementById('edit_imei').value,
+                sn: document.getElementById('edit_sn').value,
+                acessorios: document.getElementById('edit_acessorios').value
+            };
+        }
+
+        // === ENVIO PARA GOOGLE SHEETS ===
         async function sendToSheet() {
             const scriptUrl = localStorage.getItem('script_url');
             if (!scriptUrl) { alert("Configure a URL do Apps Script em ⚙️ Configurações."); return; }
 
+            const data = getFormData();
             const token = localStorage.getItem('secret_token') || '';
-            const payload = { ...currentExtractedData, _token: token };
+            const payload = { ...data, _token: token };
 
             btnSave.disabled = true; btnSave.textContent = "Enviando...";
+            let sent = false;
             try {
                 await fetch(scriptUrl, { method: 'POST', body: JSON.stringify(payload), mode: 'no-cors' });
-                statusMsg.innerHTML = "✅ Salvo na Planilha!"; statusMsg.style.backgroundColor = "#d4edda"; statusMsg.style.display = "block";
-                resultDiv.style.display = "none"; btnSave.style.display = "none";
-            } catch (err) { alert("Erro ao enviar."); }
-            finally { btnSave.disabled = false; btnSave.textContent = "Salvar no Google Sheets"; }
+                sent = true;
+                playSuccessSound();
+                statusMsg.innerHTML = "✅ Salvo na Planilha!";
+                statusMsg.style.backgroundColor = "#d4edda"; statusMsg.style.color = "#155724";
+                statusMsg.style.display = "block";
+                resultDiv.style.display = "none"; editForm.style.display = "none"; btnSave.style.display = "none";
+            } catch (err) {
+                statusMsg.innerHTML = "📡 Sem conexão — salvo localmente para reenvio";
+                statusMsg.style.backgroundColor = "#fff3cd"; statusMsg.style.color = "#856404";
+                statusMsg.style.display = "block";
+                resultDiv.style.display = "none"; editForm.style.display = "none"; btnSave.style.display = "none";
+            } finally {
+                btnSave.disabled = false; btnSave.textContent = "Salvar no Google Sheets";
+            }
+            addToHistory(data, sent);
+            sessionCount++; document.getElementById('sessionCount').textContent = sessionCount;
         }
+
+        // === HISTÓRICO LOCAL ===
+        function getHistory() {
+            try { return JSON.parse(localStorage.getItem('scan_history') || '[]'); } catch { return []; }
+        }
+        function saveHistory(h) { localStorage.setItem('scan_history', JSON.stringify(h)); }
+
+        function addToHistory(data, sent) {
+            const h = getHistory();
+            h.unshift({ data, sent, timestamp: new Date().toISOString() });
+            if (h.length > 50) h.length = 50;
+            saveHistory(h);
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const h = getHistory();
+            const section = document.getElementById('historySection');
+            const list = document.getElementById('historyList');
+            document.getElementById('historyCount').textContent = h.length;
+            if (h.length === 0) { section.style.display = 'none'; return; }
+            section.style.display = 'block';
+            list.innerHTML = h.map((item, i) => {
+                const t = new Date(item.timestamp);
+                const time = t.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const date = t.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                const label = item.data.marca && item.data.modelo ? `${item.data.marca} ${item.data.modelo}` : 'Registro';
+                const badge = item.sent
+                    ? '<button class="btn-sent-badge">✅ Enviado</button>'
+                    : `<button class="btn-resend" onclick="resendItem(${i})">🔄 Enviar</button>`;
+                return `<div class="history-item ${item.sent ? 'sent' : 'pending'}">
+                    <div class="history-info"><small>${date} ${time}</small><div>${label}</div></div>
+                    <div class="history-actions">${badge}</div>
+                </div>`;
+            }).join('');
+        }
+
+        async function resendItem(index) {
+            const scriptUrl = localStorage.getItem('script_url');
+            if (!scriptUrl) { alert("Configure a URL do Apps Script em ⚙️ Configurações."); return; }
+            const h = getHistory();
+            const item = h[index];
+            const token = localStorage.getItem('secret_token') || '';
+            const payload = { ...item.data, _token: token };
+            try {
+                await fetch(scriptUrl, { method: 'POST', body: JSON.stringify(payload), mode: 'no-cors' });
+                h[index].sent = true;
+                saveHistory(h);
+                playSuccessSound();
+                renderHistory();
+            } catch { alert("Ainda sem conexão. Tente novamente."); }
+        }
+
+        function clearHistory() {
+            if (confirm("Limpar todo o histórico?")) {
+                localStorage.removeItem('scan_history');
+                renderHistory();
+            }
+        }
+
+        function toggleHistory() {
+            const list = document.getElementById('historyList');
+            list.style.display = list.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // === DETECÇÃO OFFLINE ===
+        window.addEventListener('offline', () => { document.getElementById('offlineBanner').style.display = 'block'; });
+        window.addEventListener('online', () => { document.getElementById('offlineBanner').style.display = 'none'; syncPending(); });
+
+        async function syncPending() {
+            const scriptUrl = localStorage.getItem('script_url');
+            if (!scriptUrl) return;
+            const h = getHistory();
+            const token = localStorage.getItem('secret_token') || '';
+            let synced = 0;
+            for (let i = 0; i < h.length; i++) {
+                if (!h[i].sent) {
+                    try {
+                        await fetch(scriptUrl, { method: 'POST', body: JSON.stringify({ ...h[i].data, _token: token }), mode: 'no-cors' });
+                        h[i].sent = true; synced++;
+                    } catch { break; }
+                }
+            }
+            if (synced > 0) { saveHistory(h); renderHistory(); }
+        }
+
+        // === INIT ===
+        renderHistory();
+        if (!navigator.onLine) document.getElementById('offlineBanner').style.display = 'block';
     </script>
 </body>
 </html>
