@@ -73,7 +73,7 @@
         <label><b>🔑 Chave da API Gemini:</b></label>
         <input type="password" id="api_key_input" placeholder="Cole sua chave Gemini aqui..." onchange="saveConfig()">
         <label><b>🔗 URL do Google Apps Script:</b></label>
-        <input type="password" id="script_url_input" placeholder="Cole a URL do seu Apps Script aqui..." onchange="saveConfig()">
+        <input type="text" id="script_url_input" placeholder="Cole a URL do seu Apps Script aqui..." onchange="saveConfig()">
         <label><b>🛡️ Token Secreto (opcional):</b></label>
         <input type="password" id="secret_token_input" placeholder="Código secreto para validar envios..." onchange="saveConfig()">
         <small style="color: #666; display: block; margin-top: 10px;">Tudo fica salvo apenas neste celular/PC.</small>
@@ -182,10 +182,10 @@ Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório
 **Regras de Extração:**
 1. **Tipo de Dispositivo:** Infira (Smartphone, Tablet, Roteador) se não estiver explícito.
 2. **Marca:** Identifique o fabricante.
-3. **Modelo:** Combine o Nome Comercial e o Código Técnico (ex: XT2245-1).
-4. **IMEI:** Liste todos (separe por barras se houver dois).
+3. **Modelo:** Combine o Nome Comercial, cor e capacidade de memória. (exemplo: iPhone 16, black, 256GB)
+4. **IMEI:** Liste apenas o primeiro. assegure que tenha a quantidade correta de dígitos. caso esteja ilegivel peça nova foto. Não invente número.
 5. **Número de Série:** Procure por S/N, MSN, SN.
-6. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa).
+6. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa, manual, extrator de chip).
 
 **Formato de Resposta (Sempre em Tabela):**
 
@@ -259,8 +259,9 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             const apiKey = localStorage.getItem('gemini_key');
             if (!apiKey) { alert("Configure a chave API em ⚙️ Configurações."); return; }
             resetUI(); imagePreview.style.display = 'block'; loadingDiv.style.display = 'block';
-
-            const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:generateContent';
+            
+            //const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent';
+            const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
             try {
                 const res = await fetch(url, {
                     method: 'POST',
