@@ -1,27 +1,44 @@
 # Novo Código Apps Script — doPost com Salvamento de Imagem
 
-> **Este código deve substituir o `doPost` atual no Google Apps Script.**
-> Agora ele recebe a imagem capturada pelo app, salva no Google Drive, e registra o caminho na coluna "Etiqueta".
+> **Este código deve substituir o arquivo atual no Google Apps Script.**
+> Ele inclui uma função `autorizarPermissoes()` específica para resolver o erro de permissão do Google Drive!
 
-## Como Atualizar
+## 🚨 COMO CORRIGIR O ERRO DE PERMISSÃO DO DRIVE (Passo a Passo)
 
-1. Abra a planilha no Google Sheets
-2. Vá em **Extensões → Apps Script**
-3. Substitua o conteúdo do arquivo `Código.gs` pelo código abaixo
-4. Clique em **Salvar** (💾)
-5. Vá em **Implantar → Gerenciar implantações**
-6. Clique no ícone de **editar** (✏️) da implantação ativa
-7. Em "Versão", selecione **"Nova versão"**
-8. Clique em **Implantar**
-9. ⚠️ **IMPORTANTE:** A URL do webhook permanece a mesma!
+Quando adicionamos o comando `DriveApp` para salvar imagens, o Google exige que você autorize o acesso ao seu Google Drive **manualmente no editor** antes que o aplicativo consiga enviar fotos.
 
-> ⚠️ **Na primeira execução** o script vai pedir permissão para acessar o Google Drive (para salvar as imagens). Aceite as permissões.
+Faça exatamente o seguinte no editor do Apps Script:
+
+1. Abra a planilha e vá em **Extensões → Apps Script**.
+2. Cole todo o código abaixo no seu arquivo `Código.gs` e clique em **Salvar** (💾).
+3. No painel superior, onde tem um menu suspenso ao lado do botão **▶ Executar**, selecione a função **`autorizarPermissoes`**.
+4. Clique no botão **▶ Executar**.
+5. Vai aparecer uma janela dizendo **"Autorização necessária"**:
+   * Clique em **Revisar permissões**.
+   * Escolha a sua conta do Google.
+   * Se aparecer um aviso *"O Google não verificou este app"*, clique em **Avançado** (texto pequeno) e depois em **Acessar Projeto sem título (não seguro)**.
+   * Clique em **Permitir**.
+6. Agora vá em **Implantar → Gerenciar implantações**.
+7. Clique no ícone de **lápis (editar)** na implantação ativa.
+8. Em "Versão", selecione **"Nova versão"** e clique em **Implantar**.
+
+Pronto! A permissão para o Google Drive estará concedida e as imagens serão salvas perfeitamente sem erros!
 
 ---
 
-## Código
+## Código Completo para Colar no Apps Script
 
 ```javascript
+/**
+ * ⚠️ RODE ESTA FUNÇÃO UMA VEZ NO EDITOR PARA AUTORIZAR O GOOGLE DRIVE!
+ * Selecione "autorizarPermissoes" no topo e clique em ▶ Executar.
+ */
+function autorizarPermissoes() {
+  DriveApp.getRootFolder();
+  SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log("✅ Permissões de Planilha e Google Drive autorizadas com sucesso!");
+}
+
 function doPost(e) {
   try {
     // Pega a aba ativa da planilha atual
