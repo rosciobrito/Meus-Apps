@@ -594,7 +594,7 @@
     <footer class="app-footer">
         Scanner de Inventário UFMA &bull; OpenAI GPT Vision &bull; CSV Local<br>
         <span style="display: inline-block; margin-top: 6px; padding: 2px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 0.85em; color: var(--text-muted);">
-            🚀 Build: <strong>2026.07.01 - 08:17h</strong>
+            🚀 Build: <strong>2026.07.01 - 11:24h</strong>
         </span>
     </footer>
 
@@ -652,27 +652,74 @@
         let capturedImageBase64 = null;
 
         // ═══════════════════════════════════════════
-        // 3. ARMAZENAMENTO CSV EM MEMÓRIA (localStorage)
+        // 3. ARMAZENAMENTO: IndexedDB (imagens grandes) + localStorage (metadados leves)
         // ═══════════════════════════════════════════
-        const CSV_STORAGE_KEY = 'csv_etiquetas_data';
+        const CSV_META_KEY = 'csv_etiquetas_meta'; // dados textuais (sem imagem)
+        const IDB_NAME = 'EtiquetasDB';
+        const IDB_STORE = 'imagens';
+        const IDB_VERSION = 1;
 
-        // Colunas na mesma ordem da planilha original:
-        // Codigo | DataHora | Tipo | Marca | Modelo | IMEI | N_Serie | Acessorios | Material | Flag | Etiqueta
         const CSV_HEADERS = ['Codigo','DataHora','Tipo','Marca','Modelo','IMEI','N_Serie','Acessorios','Material','Flag','Etiqueta'];
 
-        function getCSVRows() {
+        // --- IndexedDB para imagens (sem limite de 5MB) ---
+        function openIDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+                req.onupgradeneeded = e => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(IDB_STORE)) {
+                        db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = e => resolve(e.target.result);
+                req.onerror = e => reject(e.target.error);
+            });
+        }
+
+        async function saveImageIDB(id, base64) {
+            const db = await openIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readwrite');
+                tx.objectStore(IDB_STORE).put({ id, data: base64 });
+                tx.oncomplete = () => resolve();
+                tx.onerror = e => reject(e.target.error);
+            });
+        }
+
+        async function getImageIDB(id) {
+            const db = await openIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readonly');
+                const req = tx.objectStore(IDB_STORE).get(id);
+                req.onsuccess = () => resolve(req.result ? req.result.data : '');
+                req.onerror = e => reject(e.target.error);
+            });
+        }
+
+        async function clearImagesIDB() {
+            const db = await openIDB();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readwrite');
+                tx.objectStore(IDB_STORE).clear();
+                tx.oncomplete = () => resolve();
+                tx.onerror = e => reject(e.target.error);
+            });
+        }
+
+        // --- Metadados (dados textuais, sem imagem) no localStorage ---
+        function getMetaRows() {
             try {
-                return JSON.parse(localStorage.getItem(CSV_STORAGE_KEY)) || [];
+                return JSON.parse(localStorage.getItem(CSV_META_KEY)) || [];
             } catch { return []; }
         }
 
-        function saveCSVRows(rows) {
-            localStorage.setItem(CSV_STORAGE_KEY, JSON.stringify(rows));
+        function saveMetaRows(rows) {
+            localStorage.setItem(CSV_META_KEY, JSON.stringify(rows));
             updateCSVCount();
         }
 
         function updateCSVCount() {
-            const rows = getCSVRows();
+            const rows = getMetaRows();
             document.getElementById('csvCount').textContent = rows.length;
         }
 
@@ -798,17 +845,16 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+            // JPEG 90% — mesma qualidade que vai para o GPT
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.90);
 
             playClickSound();
             showPreview(dataUrl);
             stopCamera();
 
             const base64Full = dataUrl.split(',')[1];
-            // Guardar versão reduzida para o CSV
-            resizeImageForCSV(dataUrl, resized => {
-                capturedImageBase64 = resized;
-            });
+            // Guardar a imagem COMPLETA para o CSV (sem reduzir)
+            capturedImageBase64 = base64Full;
             processImageBase64(base64Full);
         }
 
@@ -871,9 +917,8 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             reader.onload = e => {
                 showPreview(e.target.result);
                 const base64Full = e.target.result.split(',')[1];
-                resizeImageForCSV(e.target.result, resized => {
-                    capturedImageBase64 = resized;
-                });
+                // Guardar a imagem COMPLETA (sem reduzir)
+                capturedImageBase64 = base64Full;
                 processImageBase64(base64Full);
             };
             reader.readAsDataURL(file);
@@ -882,26 +927,6 @@ Se algum dado não estiver visível, preencha com "N/A".`;
         function showPreview(dataUrl) {
             preview.src = dataUrl;
             preview.style.display = 'block';
-        }
-
-        // Redimensiona imagem para ~800px de largura (economia para CSV, mantém legibilidade)
-        function resizeImageForCSV(dataUrl, callback) {
-            const img = new Image();
-            img.onload = () => {
-                const MAX_WIDTH = 800;
-                let w = img.width, h = img.height;
-                if (w > MAX_WIDTH) {
-                    h = Math.round(h * (MAX_WIDTH / w));
-                    w = MAX_WIDTH;
-                }
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = w;
-                tempCanvas.height = h;
-                tempCanvas.getContext('2d').drawImage(img, 0, 0, w, h);
-                // JPEG 70% para manter tamanho razoável no CSV
-                callback(tempCanvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
-            };
-            img.src = dataUrl;
         }
 
         // ═══════════════════════════════════════════
@@ -1017,14 +1042,14 @@ Se algum dado não estiver visível, preencha com "N/A".`;
         }
 
         // ═══════════════════════════════════════════
-        // 10. SALVAR NO CSV LOCAL (localStorage)
+        // 10. SALVAR NO CSV LOCAL (IndexedDB + localStorage)
         // ═══════════════════════════════════════════
-        function saveToCSV() {
+        async function saveToCSV() {
             const data = getEditedData();
-            const rows = getCSVRows();
+            const metaRows = getMetaRows();
 
-            // Gerar código sequencial (baseado na quantidade de registros)
-            const codigo = (rows.length + 1).toString().padStart(4, '0');
+            // Gerar código sequencial
+            const codigo = (metaRows.length + 1).toString().padStart(4, '0');
 
             // Data/Hora atual
             const now = new Date();
@@ -1033,29 +1058,39 @@ Se algum dado não estiver visível, preencha com "N/A".`;
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
 
-            // Montar linha na mesma sequência da planilha:
-            // Codigo | DataHora | Tipo | Marca | Modelo | IMEI | N_Serie | Acessorios | Material | Flag | Etiqueta
-            const row = [
+            // Salvar imagem no IndexedDB (grande, sem truncar)
+            const imageId = `img_${codigo}_${Date.now()}`;
+            if (capturedImageBase64) {
+                try {
+                    await saveImageIDB(imageId, capturedImageBase64);
+                } catch (e) {
+                    console.error('Erro ao salvar imagem no IndexedDB:', e);
+                }
+            }
+
+            // Salvar metadados (sem imagem) no localStorage
+            // Colunas: Codigo | DataHora | Tipo | Marca | Modelo | IMEI | N_Serie | Acessorios | Material | Flag | imageId
+            const metaRow = {
                 codigo,
                 dataHora,
-                data.tipo,
-                data.marca,
-                data.modelo,
-                data.imei,
-                data.sn,
-                data.acessorios,
-                data.material,
-                'FALSE',
-                capturedImageBase64 ? `data:image/jpeg;base64,${capturedImageBase64}` : ''
-            ];
+                tipo: data.tipo,
+                marca: data.marca,
+                modelo: data.modelo,
+                imei: data.imei,
+                sn: data.sn,
+                acessorios: data.acessorios,
+                material: data.material,
+                flag: 'FALSE',
+                imageId: capturedImageBase64 ? imageId : ''
+            };
 
-            rows.push(row);
-            saveCSVRows(rows);
+            metaRows.push(metaRow);
+            saveMetaRows(metaRows);
 
             playSuccessSound();
             incrementCounter();
 
-            statusMsg.innerHTML = `✅ Registro #${codigo} salvo no CSV local! (${rows.length} total)`;
+            statusMsg.innerHTML = `✅ Registro #${codigo} salvo! (${metaRows.length} total) — Imagem completa preservada`;
             statusMsg.style.backgroundColor = "rgba(52, 211, 153, 0.15)";
             statusMsg.style.color = "var(--accent-green)";
             statusMsg.style.border = "1px solid rgba(52, 211, 153, 0.3)";
@@ -1067,42 +1102,70 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             preview.style.display = "none";
             btnDownload.style.display = "block";
 
-            // Limpar imagem capturada
             capturedImageBase64 = null;
         }
 
         // ═══════════════════════════════════════════
-        // 11. EXPORTAR CSV (download)
+        // 11. EXPORTAR CSV (download) — reconstrói com imagens do IndexedDB
         // ═══════════════════════════════════════════
         function escapeCSV(field) {
             if (field == null) return '';
             const str = String(field);
-            // Se contém aspas, vírgulas, quebras de linha ou base64 longo — encapsula com aspas
             if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes(';') || str.length > 100) {
                 return '"' + str.replace(/"/g, '""') + '"';
             }
             return str;
         }
 
-        function downloadCSV() {
-            const rows = getCSVRows();
-            if (rows.length === 0) {
+        async function downloadCSV() {
+            const metaRows = getMetaRows();
+            if (metaRows.length === 0) {
                 alert('📄 Nenhum registro para exportar.');
                 return;
             }
 
-            // BOM para UTF-8 + header + linhas
+            // Indicar que está processando (pode demorar com muitas imagens)
+            statusMsg.innerHTML = '⏳ Montando CSV com imagens em alta resolução...';
+            statusMsg.style.backgroundColor = 'var(--accent-amber-glow)';
+            statusMsg.style.color = 'var(--accent-amber)';
+            statusMsg.style.border = '1px solid rgba(251, 191, 36, 0.3)';
+            statusMsg.style.display = 'block';
+
+            // Montar CSV com imagens recuperadas do IndexedDB
             let csvContent = '\uFEFF' + CSV_HEADERS.join(',') + '\n';
-            rows.forEach(row => {
+
+            for (const meta of metaRows) {
+                let imageData = '';
+                if (meta.imageId) {
+                    try {
+                        const b64 = await getImageIDB(meta.imageId);
+                        if (b64) imageData = `data:image/jpeg;base64,${b64}`;
+                    } catch (e) {
+                        imageData = 'ERRO: imagem não encontrada';
+                    }
+                }
+
+                const row = [
+                    meta.codigo,
+                    meta.dataHora,
+                    meta.tipo,
+                    meta.marca,
+                    meta.modelo,
+                    meta.imei,
+                    meta.sn,
+                    meta.acessorios,
+                    meta.material,
+                    meta.flag,
+                    imageData
+                ];
                 csvContent += row.map(escapeCSV).join(',') + '\n';
-            });
+            }
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
 
             const a = document.createElement('a');
             a.href = url;
-            // Nome do arquivo com data
             const now = new Date();
             const dateStr = now.toISOString().slice(0,10).replace(/-/g, '');
             a.download = `CapturaEtiqueta_${dateStr}.csv`;
@@ -1111,22 +1174,28 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
+            statusMsg.innerHTML = `✅ CSV exportado com ${metaRows.length} registro(s) e imagens em alta resolução!`;
+            statusMsg.style.backgroundColor = 'rgba(52, 211, 153, 0.15)';
+            statusMsg.style.color = 'var(--accent-green)';
+            statusMsg.style.border = '1px solid rgba(52, 211, 153, 0.3)';
             playSuccessSound();
         }
 
-        function clearCSV() {
-            const rows = getCSVRows();
-            if (rows.length === 0) {
+        async function clearCSV() {
+            const metaRows = getMetaRows();
+            if (metaRows.length === 0) {
                 alert('📄 Não há registros para limpar.');
                 return;
             }
-            if (!confirm(`⚠️ Tem certeza que deseja apagar ${rows.length} registro(s) do CSV?\n\nEsta ação é irreversível! Recomenda-se baixar o CSV antes de limpar.`)) {
+            if (!confirm(`⚠️ Tem certeza que deseja apagar ${metaRows.length} registro(s) do CSV?\n\nEsta ação é irreversível! Recomenda-se baixar o CSV antes de limpar.`)) {
                 return;
             }
-            localStorage.removeItem(CSV_STORAGE_KEY);
+            // Limpar tanto localStorage quanto IndexedDB
+            localStorage.removeItem(CSV_META_KEY);
+            try { await clearImagesIDB(); } catch(e) {}
             updateCSVCount();
             playClickSound();
-            statusMsg.innerHTML = "🗑️ Dados do CSV limpos com sucesso.";
+            statusMsg.innerHTML = "🗑️ Dados e imagens limpos com sucesso.";
             statusMsg.style.backgroundColor = "var(--accent-amber-glow)";
             statusMsg.style.color = "var(--accent-amber)";
             statusMsg.style.border = "1px solid rgba(251, 191, 36, 0.3)";
