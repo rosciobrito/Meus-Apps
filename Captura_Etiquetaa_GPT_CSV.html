@@ -1,0 +1,1193 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner Inventário UFMA — CSV Local</title>
+    <meta name="description" content="Scanner de etiquetas de celulares para inventário - Salvamento local CSV - UFMA">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f1119;
+            --bg-secondary: #1a1d2e;
+            --bg-card: rgba(26, 29, 46, 0.85);
+            --bg-glass: rgba(255, 255, 255, 0.04);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --text-primary: #e8eaf0;
+            --text-secondary: #8b8fa3;
+            --text-muted: #5a5e72;
+            --accent-blue: #4f8cff;
+            --accent-blue-glow: rgba(79, 140, 255, 0.25);
+            --accent-green: #34d399;
+            --accent-green-glow: rgba(52, 211, 153, 0.2);
+            --accent-amber: #fbbf24;
+            --accent-amber-glow: rgba(251, 191, 36, 0.15);
+            --accent-red: #f87171;
+            --accent-red-glow: rgba(248, 113, 113, 0.15);
+            --accent-purple: #a78bfa;
+            --accent-orange: #fb923c;
+            --accent-orange-glow: rgba(251, 146, 60, 0.2);
+            --radius: 14px;
+            --radius-sm: 8px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            max-width: 520px;
+            margin: 0 auto;
+            padding: 16px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            background-image:
+                radial-gradient(ellipse at 20% 0%, rgba(251, 146, 60, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(167, 139, 250, 0.06) 0%, transparent 50%);
+        }
+
+        /* --- Header --- */
+        .app-header {
+            text-align: center;
+            padding: 20px 0 8px;
+            margin-bottom: 16px;
+        }
+        .app-header h1 {
+            font-size: 1.35em;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--accent-orange), var(--accent-amber));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .app-header small {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.75em;
+            margin-top: 4px;
+            font-weight: 500;
+        }
+        .app-header .badge-csv {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 3px 12px;
+            background: var(--accent-orange-glow);
+            color: var(--accent-orange);
+            border-radius: 20px;
+            font-size: 0.7em;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        /* --- Session counter --- */
+        .session-counter {
+            text-align: center;
+            font-size: 0.78em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+        .session-counter span {
+            background: var(--accent-green-glow);
+            color: var(--accent-green);
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        /* --- Config toggle --- */
+        .config-toggle {
+            text-align: center;
+            margin-bottom: 14px;
+        }
+        .config-toggle button {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            padding: 8px 20px;
+            cursor: pointer;
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .config-toggle button:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+
+        /* --- Config panel --- */
+        .config-box {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            padding: 18px;
+            border-radius: var(--radius);
+            margin-bottom: 16px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-glass);
+            border-left: 4px solid var(--accent-amber);
+            transition: all 0.3s ease;
+        }
+        .config-box.collapsed {
+            display: none;
+        }
+        .config-box label {
+            display: block;
+            margin-top: 14px;
+            font-size: 0.82em;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        .config-box label:first-child { margin-top: 0; }
+
+        .config-box input[type="password"],
+        .config-box input[type="text"],
+        .config-box select {
+            width: 100%;
+            padding: 11px 14px;
+            margin-top: 6px;
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.88em;
+            transition: border-color 0.2s;
+        }
+        .config-box input:focus,
+        .config-box select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px var(--accent-blue-glow);
+        }
+        .config-box small {
+            display: block;
+            margin-top: 10px;
+            color: var(--text-muted);
+            font-size: 0.75em;
+        }
+        .config-box select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        /* --- Paste area --- */
+        .paste-area {
+            border: 2px dashed var(--border-glass);
+            border-radius: var(--radius);
+            padding: 14px;
+            text-align: center;
+            background: var(--bg-glass);
+            margin-bottom: 14px;
+            font-size: 0.82em;
+            color: var(--text-secondary);
+            transition: all 0.25s;
+        }
+        .paste-area:hover, .paste-area.drag-over {
+            border-color: var(--accent-blue);
+            background: var(--accent-blue-glow);
+            color: var(--accent-blue);
+        }
+
+        /* --- Buttons --- */
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .btn {
+            flex: 1;
+            min-width: 0;
+            padding: 14px 12px;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            color: white;
+            text-align: center;
+            font-family: inherit;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .btn:active { transform: scale(0.97); }
+
+        .btn-camera {
+            background: linear-gradient(135deg, #4f8cff, #3b6de0);
+            box-shadow: 0 4px 16px var(--accent-blue-glow);
+        }
+        .btn-camera:hover { box-shadow: 0 6px 24px rgba(79, 140, 255, 0.35); }
+
+        .btn-upload {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            box-shadow: 0 4px 12px rgba(107, 114, 128, 0.2);
+        }
+        .btn-upload:hover { box-shadow: 0 6px 20px rgba(107, 114, 128, 0.3); }
+
+        .btn-capture {
+            display: none;
+            width: 100%;
+            padding: 16px;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, var(--accent-green), #059669);
+            box-shadow: 0 4px 16px var(--accent-green-glow);
+            animation: pulse-glow 2s infinite;
+        }
+
+        .btn-flash {
+            display: none;
+            padding: 12px 18px;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 8px;
+        }
+        .btn-flash.active {
+            background: var(--accent-amber-glow);
+            border-color: var(--accent-amber);
+            color: var(--accent-amber);
+        }
+
+        .btn-save {
+            display: none;
+            width: 100%;
+            margin-top: 14px;
+            background: linear-gradient(135deg, var(--accent-orange), #ea580c);
+            box-shadow: 0 4px 16px var(--accent-orange-glow);
+        }
+        .btn-save:hover { box-shadow: 0 6px 24px rgba(251, 146, 60, 0.35); }
+        .btn-save:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-download {
+            display: none;
+            width: 100%;
+            margin-top: 10px;
+            background: linear-gradient(135deg, var(--accent-green), #059669);
+            box-shadow: 0 4px 16px var(--accent-green-glow);
+        }
+        .btn-download:hover { box-shadow: 0 6px 24px rgba(52, 211, 153, 0.35); }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 4px 16px var(--accent-green-glow); }
+            50% { box-shadow: 0 4px 28px rgba(52, 211, 153, 0.4); }
+        }
+
+        /* --- Video & Preview --- */
+        video {
+            width: 100%;
+            border-radius: var(--radius);
+            background: #000;
+            display: none;
+            margin-bottom: 10px;
+        }
+        canvas { display: none; }
+
+        .camera-controls {
+            display: none;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .camera-controls.visible {
+            display: flex;
+        }
+
+        .camera-info {
+            display: none;
+            text-align: center;
+            font-size: 0.72em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .camera-info .res-badge {
+            background: var(--accent-green-glow);
+            color: var(--accent-green);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        #imagePreview {
+            display: none;
+            width: 100%;
+            max-height: 220px;
+            object-fit: contain;
+            border-radius: var(--radius);
+            border: 1px solid var(--border-glass);
+            margin-bottom: 12px;
+        }
+
+        /* --- Loading --- */
+        #loading {
+            text-align: center;
+            font-weight: 600;
+            color: var(--accent-amber);
+            display: none;
+            margin: 18px 0;
+            font-size: 0.95em;
+        }
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s steps(3, end) infinite;
+        }
+        @keyframes dots {
+            0% { content: ''; }
+            33% { content: '.'; }
+            66% { content: '..'; }
+            100% { content: '...'; }
+        }
+
+        /* --- Status --- */
+        #statusMsg {
+            text-align: center;
+            font-weight: 600;
+            margin: 14px 0;
+            display: none;
+            padding: 14px;
+            border-radius: var(--radius);
+            font-size: 0.9em;
+        }
+
+        /* --- Result table --- */
+        #result {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            padding: 16px;
+            border-radius: var(--radius);
+            margin-top: 14px;
+            display: none;
+            overflow-x: auto;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-glass);
+        }
+        #result table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 0.85em;
+        }
+        #result th, #result td {
+            border: 1px solid var(--border-glass);
+            padding: 10px 12px;
+            text-align: left;
+        }
+        #result th {
+            background: rgba(79, 140, 255, 0.1);
+            color: var(--accent-blue);
+            font-weight: 600;
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        #result td { color: var(--text-primary); }
+
+        /* --- Edit form --- */
+        .edit-form {
+            display: none;
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            padding: 18px;
+            border-radius: var(--radius);
+            margin-top: 14px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-glass);
+        }
+        .edit-form h3 {
+            font-size: 0.95em;
+            margin-bottom: 12px;
+            color: var(--accent-amber);
+        }
+        .edit-form label {
+            display: block;
+            font-size: 0.78em;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .edit-form label:first-of-type { margin-top: 0; }
+        .edit-form input[type="text"] {
+            width: 100%;
+            padding: 10px 12px;
+            margin-top: 4px;
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            background: var(--bg-glass);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.88em;
+            transition: border-color 0.2s;
+        }
+        .edit-form input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px var(--accent-blue-glow);
+        }
+
+        /* --- CSV records counter --- */
+        .csv-records-bar {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            margin-bottom: 14px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-glass);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.82em;
+        }
+        .csv-records-bar .count {
+            color: var(--accent-orange);
+            font-weight: 700;
+        }
+        .csv-records-bar .actions {
+            display: flex;
+            gap: 8px;
+        }
+        .csv-records-bar button {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            padding: 6px 12px;
+            cursor: pointer;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .csv-records-bar button:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+        }
+        .csv-records-bar button.danger:hover {
+            background: var(--accent-red-glow);
+            color: var(--accent-red);
+            border-color: rgba(248, 113, 113, 0.3);
+        }
+
+        /* --- File input hidden --- */
+        input[type="file"] { display: none; }
+
+        /* --- Footer --- */
+        .app-footer {
+            text-align: center;
+            padding: 24px 0 12px;
+            font-size: 0.7em;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <header class="app-header">
+        <h1>📱 Scanner de Inventário</h1>
+        <small>UFMA — Captura de Etiquetas</small>
+        <div class="badge-csv">📄 MODO CSV LOCAL</div>
+    </header>
+
+    <div class="session-counter">Sessão: <span id="sessionCount">0</span> registro(s)</div>
+
+    <!-- CSV records bar -->
+    <div class="csv-records-bar">
+        <div>📄 CSV: <span class="count" id="csvCount">0</span> registro(s) em memória</div>
+        <div class="actions">
+            <button onclick="downloadCSV()" title="Baixar CSV">📥</button>
+            <button onclick="clearCSV()" class="danger" title="Limpar dados">🗑️</button>
+        </div>
+    </div>
+
+    <!-- Config panel -->
+    <div class="config-toggle">
+        <button onclick="toggleConfig()" id="btnConfig">⚙️ Configurações</button>
+    </div>
+
+    <div class="config-box collapsed" id="configPanel">
+        <label>🔑 Chave da API OpenAI (GPT)</label>
+        <input type="password" id="cfg_api_key" placeholder="Começa com sk-..." onchange="saveConfig()">
+
+        <label>🤖 Modelo GPT</label>
+        <select id="cfg_model" onchange="saveConfig()">
+            <option value="gpt-4o">GPT-4o (melhor qualidade)</option>
+            <option value="gpt-4o-mini">GPT-4o Mini (mais barato)</option>
+            <option value="gpt-4.1-mini">GPT-4.1 Mini</option>
+        </select>
+
+        <small>🔒 Tudo fica salvo apenas neste dispositivo (localStorage).<br>
+        📄 Os dados são salvos em arquivo CSV local — sem planilha online.</small>
+    </div>
+
+    <!-- Paste area -->
+    <div class="paste-area" id="pasteArea">📸 <b>Ctrl+V</b> para colar imagem da área de transferência</div>
+
+    <!-- Action buttons -->
+    <div class="action-buttons">
+        <button id="btnStart" class="btn btn-camera" onclick="startCamera()">📷 Câmera</button>
+        <label for="fileInput" class="btn btn-upload">📁 Arquivo</label>
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(event)">
+    </div>
+
+    <!-- Camera / Preview -->
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div class="camera-controls" id="cameraControls">
+        <button class="btn-flash" id="btnFlash" onclick="toggleFlash()">🔦 Lanterna</button>
+    </div>
+    <div class="camera-info" id="cameraInfo">Resolução: <span class="res-badge" id="resInfo">--</span></div>
+    <img id="imagePreview" alt="Preview da etiqueta">
+    <button id="btnCapture" class="btn btn-capture" onclick="takePhoto()">📸 Capturar Etiqueta (Alta Resolução)</button>
+
+    <!-- Loading / Status -->
+    <div id="loading">🤖 Analisando com GPT<span class="loading-dots"></span></div>
+    <div id="statusMsg"></div>
+
+    <!-- AI Result -->
+    <div id="result"></div>
+
+    <!-- Editable form -->
+    <div class="edit-form" id="editForm">
+        <h3>✏️ Confira e corrija antes de salvar:</h3>
+        <label>Tipo</label>
+        <input type="text" id="edit_tipo">
+        <label>Marca</label>
+        <input type="text" id="edit_marca">
+        <label>Modelo</label>
+        <input type="text" id="edit_modelo">
+        <label>IMEI</label>
+        <input type="text" id="edit_imei">
+        <label>Nº Série</label>
+        <input type="text" id="edit_sn">
+        <label>Material</label>
+        <input type="text" id="edit_material" placeholder="Nº do Material (se houver na etiqueta)">
+        <label>Acessórios</label>
+        <input type="text" id="edit_acessorios">
+    </div>
+
+    <!-- Save button -->
+    <button id="btnSave" class="btn btn-save" onclick="saveToCSV()">📄 Salvar no CSV Local</button>
+
+    <!-- Download button (appears after saving) -->
+    <button id="btnDownload" class="btn btn-download" onclick="downloadCSV()">📥 Baixar Arquivo CSV</button>
+
+    <footer class="app-footer">
+        Scanner de Inventário UFMA &bull; OpenAI GPT Vision &bull; CSV Local<br>
+        <span style="display: inline-block; margin-top: 6px; padding: 2px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 0.85em; color: var(--text-muted);">
+            🚀 Build: <strong>2026.07.01 - 08:17h</strong>
+        </span>
+    </footer>
+
+    <script>
+        // ═══════════════════════════════════════════
+        // 1. CONFIGURAÇÕES (localStorage)
+        // ═══════════════════════════════════════════
+        const CONFIG_KEYS = {
+            apiKey:   'openai_key',
+            model:    'openai_model'
+        };
+
+        // Carregar configs salvas
+        document.getElementById('cfg_api_key').value = localStorage.getItem(CONFIG_KEYS.apiKey) || '';
+        document.getElementById('cfg_model').value   = localStorage.getItem(CONFIG_KEYS.model) || 'gpt-4o';
+
+        // Abrir config automaticamente se não configurado
+        if (!localStorage.getItem(CONFIG_KEYS.apiKey)) {
+            document.getElementById('configPanel').classList.remove('collapsed');
+        }
+
+        function toggleConfig() {
+            document.getElementById('configPanel').classList.toggle('collapsed');
+        }
+
+        function saveConfig() {
+            localStorage.setItem(CONFIG_KEYS.apiKey, document.getElementById('cfg_api_key').value.trim());
+            localStorage.setItem(CONFIG_KEYS.model,  document.getElementById('cfg_model').value);
+        }
+
+        function getConfig(key, alertMsg) {
+            const val = localStorage.getItem(key);
+            if (!val && alertMsg) alert(alertMsg);
+            return val;
+        }
+
+        // ═══════════════════════════════════════════
+        // 2. ELEMENTOS DOM
+        // ═══════════════════════════════════════════
+        const video      = document.getElementById('video');
+        const canvas     = document.getElementById('canvas');
+        const preview    = document.getElementById('imagePreview');
+        const btnStart   = document.getElementById('btnStart');
+        const btnCapture = document.getElementById('btnCapture');
+        const btnSave    = document.getElementById('btnSave');
+        const btnDownload = document.getElementById('btnDownload');
+        const resultDiv  = document.getElementById('result');
+        const editForm   = document.getElementById('editForm');
+        const loadingDiv = document.getElementById('loading');
+        const statusMsg  = document.getElementById('statusMsg');
+
+        let stream;
+        let sessionCount = 0;
+        let currentExtractedData = {};
+        let capturedImageBase64 = null;
+
+        // ═══════════════════════════════════════════
+        // 3. ARMAZENAMENTO CSV EM MEMÓRIA (localStorage)
+        // ═══════════════════════════════════════════
+        const CSV_STORAGE_KEY = 'csv_etiquetas_data';
+
+        // Colunas na mesma ordem da planilha original:
+        // Codigo | DataHora | Tipo | Marca | Modelo | IMEI | N_Serie | Acessorios | Material | Flag | Etiqueta
+        const CSV_HEADERS = ['Codigo','DataHora','Tipo','Marca','Modelo','IMEI','N_Serie','Acessorios','Material','Flag','Etiqueta'];
+
+        function getCSVRows() {
+            try {
+                return JSON.parse(localStorage.getItem(CSV_STORAGE_KEY)) || [];
+            } catch { return []; }
+        }
+
+        function saveCSVRows(rows) {
+            localStorage.setItem(CSV_STORAGE_KEY, JSON.stringify(rows));
+            updateCSVCount();
+        }
+
+        function updateCSVCount() {
+            const rows = getCSVRows();
+            document.getElementById('csvCount').textContent = rows.length;
+        }
+
+        // Inicializar contador ao carregar
+        updateCSVCount();
+
+        // ═══════════════════════════════════════════
+        // 4. PROMPT PARA O GPT
+        // ═══════════════════════════════════════════
+        const ocrPrompt = `Você é um assistente especializado em inventário e OCR técnico. Sua única função é analisar fotos de etiquetas de embalagens de eletrônicos e extrair dados estruturados.
+
+Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório e responder DIRETAMENTE com uma Tabela Markdown contendo os dados abaixo.
+
+**Regras de Extração:**
+1. **Tipo de Dispositivo:** Infira (Smartphone, Tablet, Roteador) se não estiver explícito.
+2. **Marca:** Identifique o fabricante.
+3. **Modelo:** Combine o Nome Comercial, cor e capacidade (ex: "iPhone 16, Black, 256GB" ou "EDGE 60 FUSION").
+4. **IMEI:** Liste todos (separe por barras se houver dois). Apenas números.
+5. **Número de Série:** Procure por S/N, MSN, SN. Apenas o código alfanumérico.
+6. **Material:** Procure na etiqueta por campos rotulados "Material", "Mat.", "Nº Material", "Material Number" ou "Matnr". Extraia apenas o número/código associado. Se não encontrar, preencha com "N/A".
+7. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa, ferramenta de remoção de chip, manual). Separe por vírgula.
+
+**Formato de Resposta (Sempre em Tabela Markdown):**
+
+| Campo | Dados Extraídos |
+| :--- | :--- |
+| **Tipo** | ... |
+| **Marca** | ... |
+| **Modelo** | ... |
+| **IMEI** | ... |
+| **Nº Série** | ... |
+| **Material** | ... |
+| **Acessórios** | ... |
+
+Se algum dado não estiver visível, preencha com "N/A".`;
+
+        // ═══════════════════════════════════════════
+        // 5. CÂMERA (Alta Resolução + Autofoco + Flash)
+        // ═══════════════════════════════════════════
+        let flashOn = false;
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 4032 },
+                        height: { ideal: 3024 },
+                        focusMode: { ideal: 'continuous' },
+                        whiteBalanceMode: { ideal: 'continuous' },
+                        exposureMode: { ideal: 'continuous' }
+                    }
+                });
+
+                video.style.display = 'block';
+                video.srcObject = stream;
+                btnStart.style.display = 'none';
+                btnCapture.style.display = 'block';
+
+                const cameraControls = document.getElementById('cameraControls');
+                cameraControls.classList.add('visible');
+
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+                const btnFlash = document.getElementById('btnFlash');
+                if (capabilities.torch) {
+                    btnFlash.style.display = 'inline-flex';
+                } else {
+                    btnFlash.style.display = 'none';
+                }
+
+                try {
+                    const constraints = {};
+                    if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                        constraints.focusMode = 'continuous';
+                    }
+                    if (Object.keys(constraints).length > 0) {
+                        await track.applyConstraints({ advanced: [constraints] });
+                    }
+                } catch (e) { /* nem todos os dispositivos suportam */ }
+
+                video.addEventListener('loadedmetadata', showResolution, { once: true });
+
+                resetUI();
+                video.style.display = 'block';
+                cameraControls.classList.add('visible');
+                btnCapture.style.display = 'block';
+                btnStart.style.display = 'none';
+
+            } catch (err) {
+                alert("Erro na câmera: " + err.message);
+            }
+        }
+
+        function showResolution() {
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            const megapixels = ((w * h) / 1000000).toFixed(1);
+            const infoDiv = document.getElementById('cameraInfo');
+            document.getElementById('resInfo').textContent = `${w}×${h} (${megapixels}MP)`;
+            infoDiv.style.display = 'block';
+        }
+
+        async function toggleFlash() {
+            if (!stream) return;
+            const track = stream.getVideoTracks()[0];
+            const btnFlash = document.getElementById('btnFlash');
+            try {
+                flashOn = !flashOn;
+                await track.applyConstraints({ advanced: [{ torch: flashOn }] });
+                btnFlash.classList.toggle('active', flashOn);
+                btnFlash.textContent = flashOn ? '🔦 Lanterna ON' : '🔦 Lanterna';
+            } catch (e) {
+                flashOn = false;
+                btnFlash.classList.remove('active');
+            }
+        }
+
+        function takePhoto() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+            playClickSound();
+            showPreview(dataUrl);
+            stopCamera();
+
+            const base64Full = dataUrl.split(',')[1];
+            // Guardar versão reduzida para o CSV
+            resizeImageForCSV(dataUrl, resized => {
+                capturedImageBase64 = resized;
+            });
+            processImageBase64(base64Full);
+        }
+
+        function stopCamera() {
+            if (stream) {
+                if (flashOn) {
+                    try {
+                        const track = stream.getVideoTracks()[0];
+                        track.applyConstraints({ advanced: [{ torch: false }] });
+                    } catch(e) {}
+                    flashOn = false;
+                    const btnFlash = document.getElementById('btnFlash');
+                    btnFlash.classList.remove('active');
+                    btnFlash.textContent = '🔦 Lanterna';
+                }
+
+                stream.getTracks().forEach(t => t.stop());
+                video.style.display = 'none';
+                btnCapture.style.display = 'none';
+                btnStart.style.display = 'block';
+
+                document.getElementById('cameraControls').classList.remove('visible');
+                document.getElementById('cameraInfo').style.display = 'none';
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        // 6. UPLOAD / PASTE
+        // ═══════════════════════════════════════════
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (file) { stopCamera(); readFileAsBase64(file); }
+        }
+
+        document.addEventListener('paste', e => {
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            for (let i in items) {
+                if (items[i].kind === 'file') {
+                    stopCamera();
+                    readFileAsBase64(items[i].getAsFile());
+                    break;
+                }
+            }
+        });
+
+        const pasteArea = document.getElementById('pasteArea');
+        pasteArea.addEventListener('dragover', e => { e.preventDefault(); pasteArea.classList.add('drag-over'); });
+        pasteArea.addEventListener('dragleave', () => pasteArea.classList.remove('drag-over'));
+        pasteArea.addEventListener('drop', e => {
+            e.preventDefault();
+            pasteArea.classList.remove('drag-over');
+            if (e.dataTransfer.files.length) {
+                stopCamera();
+                readFileAsBase64(e.dataTransfer.files[0]);
+            }
+        });
+
+        function readFileAsBase64(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                showPreview(e.target.result);
+                const base64Full = e.target.result.split(',')[1];
+                resizeImageForCSV(e.target.result, resized => {
+                    capturedImageBase64 = resized;
+                });
+                processImageBase64(base64Full);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function showPreview(dataUrl) {
+            preview.src = dataUrl;
+            preview.style.display = 'block';
+        }
+
+        // Redimensiona imagem para ~800px de largura (economia para CSV, mantém legibilidade)
+        function resizeImageForCSV(dataUrl, callback) {
+            const img = new Image();
+            img.onload = () => {
+                const MAX_WIDTH = 800;
+                let w = img.width, h = img.height;
+                if (w > MAX_WIDTH) {
+                    h = Math.round(h * (MAX_WIDTH / w));
+                    w = MAX_WIDTH;
+                }
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = w;
+                tempCanvas.height = h;
+                tempCanvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                // JPEG 70% para manter tamanho razoável no CSV
+                callback(tempCanvas.toDataURL('image/jpeg', 0.7).split(',')[1]);
+            };
+            img.src = dataUrl;
+        }
+
+        // ═══════════════════════════════════════════
+        // 7. UI HELPERS
+        // ═══════════════════════════════════════════
+        function resetUI() {
+            statusMsg.style.display = 'none';
+            resultDiv.style.display = 'none';
+            editForm.style.display = 'none';
+            btnSave.style.display = 'none';
+            btnDownload.style.display = 'none';
+            loadingDiv.style.display = 'none';
+            preview.style.display = 'none';
+        }
+
+        // ═══════════════════════════════════════════
+        // 8. OPENAI GPT — CHAMADA DE API
+        // ═══════════════════════════════════════════
+        async function processImageBase64(base64) {
+            const apiKey = getConfig(CONFIG_KEYS.apiKey, '⚠️ Insira a chave da API OpenAI em ⚙️ Configurações.');
+            if (!apiKey) return;
+
+            const model = localStorage.getItem(CONFIG_KEYS.model) || 'gpt-4o';
+
+            resetUI();
+            preview.style.display = 'block';
+            loadingDiv.style.display = 'block';
+
+            try {
+                const res = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${apiKey}`
+                    },
+                    body: JSON.stringify({
+                        model: model,
+                        messages: [{
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: ocrPrompt },
+                                { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${base64}`, detail: 'high' } }
+                            ]
+                        }],
+                        max_tokens: 1200
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.error) {
+                    throw new Error(data.error.message || JSON.stringify(data.error));
+                }
+
+                const txt = data.choices[0].message.content;
+                resultDiv.innerHTML = marked.parse(txt);
+                extractAndFillForm();
+
+                loadingDiv.style.display = 'none';
+                resultDiv.style.display = 'block';
+                editForm.style.display = 'block';
+                btnSave.style.display = 'block';
+                playSuccessSound();
+
+            } catch (err) {
+                loadingDiv.style.display = 'none';
+                playErrorSound();
+                alert("❌ Erro na API: " + err.message);
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        // 9. EXTRAÇÃO DE DADOS DA TABELA
+        // ═══════════════════════════════════════════
+        function extractAndFillForm() {
+            const rows = resultDiv.querySelectorAll('tr');
+            currentExtractedData = { tipo: "", marca: "", modelo: "", imei: "", sn: "", material: "", acessorios: "" };
+
+            rows.forEach(r => {
+                const c = r.querySelectorAll('td');
+                if (c.length === 2) {
+                    const k = c[0].textContent.toLowerCase();
+                    const v = c[1].textContent.trim();
+                    if (k.includes('tipo'))                          currentExtractedData.tipo = v;
+                    else if (k.includes('marca'))                    currentExtractedData.marca = v;
+                    else if (k.includes('modelo'))                   currentExtractedData.modelo = v;
+                    else if (k.includes('imei'))                     currentExtractedData.imei = v;
+                    else if (k.includes('série') || k.includes('sn')) currentExtractedData.sn = v;
+                    else if (k.includes('material'))                 currentExtractedData.material = v;
+                    else if (k.includes('acessório') || k.includes('acessori')) currentExtractedData.acessorios = v;
+                }
+            });
+
+            document.getElementById('edit_tipo').value       = currentExtractedData.tipo;
+            document.getElementById('edit_marca').value      = currentExtractedData.marca;
+            document.getElementById('edit_modelo').value     = currentExtractedData.modelo;
+            document.getElementById('edit_imei').value       = currentExtractedData.imei;
+            document.getElementById('edit_sn').value         = currentExtractedData.sn;
+            document.getElementById('edit_material').value   = currentExtractedData.material;
+            document.getElementById('edit_acessorios').value = currentExtractedData.acessorios;
+        }
+
+        function getEditedData() {
+            return {
+                tipo:       document.getElementById('edit_tipo').value.trim(),
+                marca:      document.getElementById('edit_marca').value.trim(),
+                modelo:     document.getElementById('edit_modelo').value.trim(),
+                imei:       document.getElementById('edit_imei').value.trim(),
+                sn:         document.getElementById('edit_sn').value.trim(),
+                material:   document.getElementById('edit_material').value.trim(),
+                acessorios: document.getElementById('edit_acessorios').value.trim()
+            };
+        }
+
+        // ═══════════════════════════════════════════
+        // 10. SALVAR NO CSV LOCAL (localStorage)
+        // ═══════════════════════════════════════════
+        function saveToCSV() {
+            const data = getEditedData();
+            const rows = getCSVRows();
+
+            // Gerar código sequencial (baseado na quantidade de registros)
+            const codigo = (rows.length + 1).toString().padStart(4, '0');
+
+            // Data/Hora atual
+            const now = new Date();
+            const dataHora = now.toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+
+            // Montar linha na mesma sequência da planilha:
+            // Codigo | DataHora | Tipo | Marca | Modelo | IMEI | N_Serie | Acessorios | Material | Flag | Etiqueta
+            const row = [
+                codigo,
+                dataHora,
+                data.tipo,
+                data.marca,
+                data.modelo,
+                data.imei,
+                data.sn,
+                data.acessorios,
+                data.material,
+                'FALSE',
+                capturedImageBase64 ? `data:image/jpeg;base64,${capturedImageBase64}` : ''
+            ];
+
+            rows.push(row);
+            saveCSVRows(rows);
+
+            playSuccessSound();
+            incrementCounter();
+
+            statusMsg.innerHTML = `✅ Registro #${codigo} salvo no CSV local! (${rows.length} total)`;
+            statusMsg.style.backgroundColor = "rgba(52, 211, 153, 0.15)";
+            statusMsg.style.color = "var(--accent-green)";
+            statusMsg.style.border = "1px solid rgba(52, 211, 153, 0.3)";
+            statusMsg.style.display = "block";
+
+            resultDiv.style.display = "none";
+            editForm.style.display = "none";
+            btnSave.style.display = "none";
+            preview.style.display = "none";
+            btnDownload.style.display = "block";
+
+            // Limpar imagem capturada
+            capturedImageBase64 = null;
+        }
+
+        // ═══════════════════════════════════════════
+        // 11. EXPORTAR CSV (download)
+        // ═══════════════════════════════════════════
+        function escapeCSV(field) {
+            if (field == null) return '';
+            const str = String(field);
+            // Se contém aspas, vírgulas, quebras de linha ou base64 longo — encapsula com aspas
+            if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes(';') || str.length > 100) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
+        }
+
+        function downloadCSV() {
+            const rows = getCSVRows();
+            if (rows.length === 0) {
+                alert('📄 Nenhum registro para exportar.');
+                return;
+            }
+
+            // BOM para UTF-8 + header + linhas
+            let csvContent = '\uFEFF' + CSV_HEADERS.join(',') + '\n';
+            rows.forEach(row => {
+                csvContent += row.map(escapeCSV).join(',') + '\n';
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            // Nome do arquivo com data
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0,10).replace(/-/g, '');
+            a.download = `CapturaEtiqueta_${dateStr}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            playSuccessSound();
+        }
+
+        function clearCSV() {
+            const rows = getCSVRows();
+            if (rows.length === 0) {
+                alert('📄 Não há registros para limpar.');
+                return;
+            }
+            if (!confirm(`⚠️ Tem certeza que deseja apagar ${rows.length} registro(s) do CSV?\n\nEsta ação é irreversível! Recomenda-se baixar o CSV antes de limpar.`)) {
+                return;
+            }
+            localStorage.removeItem(CSV_STORAGE_KEY);
+            updateCSVCount();
+            playClickSound();
+            statusMsg.innerHTML = "🗑️ Dados do CSV limpos com sucesso.";
+            statusMsg.style.backgroundColor = "var(--accent-amber-glow)";
+            statusMsg.style.color = "var(--accent-amber)";
+            statusMsg.style.border = "1px solid rgba(251, 191, 36, 0.3)";
+            statusMsg.style.display = "block";
+        }
+
+        // ═══════════════════════════════════════════
+        // 12. CONTADOR DE SESSÃO
+        // ═══════════════════════════════════════════
+        function incrementCounter() {
+            sessionCount++;
+            document.getElementById('sessionCount').textContent = sessionCount;
+        }
+
+        // ═══════════════════════════════════════════
+        // 13. SONS DE FEEDBACK (Web Audio API)
+        // ═══════════════════════════════════════════
+        function playClickSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value = 880;
+                gain.gain.value = 0.15;
+                osc.start();
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+                osc.stop(ctx.currentTime + 0.1);
+            } catch(e) {}
+        }
+
+        function playSuccessSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [523, 659, 784].forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.frequency.value = freq;
+                    gain.gain.value = 0.12;
+                    osc.start(ctx.currentTime + i * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.15);
+                    osc.stop(ctx.currentTime + i * 0.1 + 0.15);
+                });
+            } catch(e) {}
+        }
+
+        function playErrorSound() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain); gain.connect(ctx.destination);
+                osc.frequency.value = 300;
+                osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.3);
+                gain.gain.value = 0.15;
+                osc.start();
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+                osc.stop(ctx.currentTime + 0.3);
+            } catch(e) {}
+        }
+    </script>
+</body>
+</html>
