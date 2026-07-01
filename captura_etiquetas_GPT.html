@@ -243,6 +243,26 @@
             animation: pulse-glow 2s infinite;
         }
 
+        .btn-flash {
+            display: none;
+            padding: 12px 18px;
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.85em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 8px;
+        }
+        .btn-flash.active {
+            background: var(--accent-amber-glow);
+            border-color: var(--accent-amber);
+            color: var(--accent-amber);
+        }
+
         .btn-save {
             display: none;
             width: 100%;
@@ -271,6 +291,33 @@
             margin-bottom: 10px;
         }
         canvas { display: none; }
+
+        .camera-controls {
+            display: none;
+            gap: 10px;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .camera-controls.visible {
+            display: flex;
+        }
+
+        .camera-info {
+            display: none;
+            text-align: center;
+            font-size: 0.72em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .camera-info .res-badge {
+            background: var(--accent-green-glow);
+            color: var(--accent-green);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
 
         #imagePreview {
             display: none;
@@ -450,8 +497,12 @@
     <!-- Camera / Preview -->
     <video id="video" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
+    <div class="camera-controls" id="cameraControls">
+        <button class="btn-flash" id="btnFlash" onclick="toggleFlash()">🔦 Lanterna</button>
+    </div>
+    <div class="camera-info" id="cameraInfo">Resolução: <span class="res-badge" id="resInfo">--</span></div>
     <img id="imagePreview" alt="Preview da etiqueta">
-    <button id="btnCapture" class="btn btn-capture" onclick="takePhoto()">📸 Capturar Etiqueta</button>
+    <button id="btnCapture" class="btn btn-capture" onclick="takePhoto()">📸 Capturar Etiqueta (Alta Resolução)</button>
 
     <!-- Loading / Status -->
     <div id="loading">🤖 Analisando com GPT<span class="loading-dots"></span></div>
@@ -570,28 +621,105 @@ Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório
 Se algum dado não estiver visível, preencha com "N/A".`;
 
         // ═══════════════════════════════════════════
-        // 4. CÂMERA
+        // 4. CÂMERA (Alta Resolução + Autofoco + Flash)
         // ═══════════════════════════════════════════
+        let flashOn = false;
+
         async function startCamera() {
             try {
+                // Pede a MÁXIMA resolução disponível da câmera traseira
+                // com autofoco contínuo para etiquetas
                 stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 4032 },     // 12MP+
+                        height: { ideal: 3024 },
+                        focusMode: { ideal: 'continuous' },
+                        // Preferências adicionais para OCR
+                        whiteBalanceMode: { ideal: 'continuous' },
+                        exposureMode: { ideal: 'continuous' }
+                    }
                 });
+
                 video.style.display = 'block';
                 video.srcObject = stream;
                 btnStart.style.display = 'none';
                 btnCapture.style.display = 'block';
+
+                // Mostrar controles de câmera
+                const cameraControls = document.getElementById('cameraControls');
+                cameraControls.classList.add('visible');
+
+                // Verificar suporte a flash/lanterna
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+                const btnFlash = document.getElementById('btnFlash');
+                if (capabilities.torch) {
+                    btnFlash.style.display = 'inline-flex';
+                } else {
+                    btnFlash.style.display = 'none';
+                }
+
+                // Tentar aplicar autofoco contínuo + resolução máxima
+                try {
+                    const constraints = {};
+                    if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+                        constraints.focusMode = 'continuous';
+                    }
+                    if (Object.keys(constraints).length > 0) {
+                        await track.applyConstraints({ advanced: [constraints] });
+                    }
+                } catch (e) { /* nem todos os dispositivos suportam */ }
+
+                // Mostrar resolução real ao usuário (após stream iniciar)
+                video.addEventListener('loadedmetadata', showResolution, { once: true });
+
                 resetUI();
+                video.style.display = 'block'; // manter vídeo visível após resetUI
+                cameraControls.classList.add('visible');
+                btnCapture.style.display = 'block';
+                btnStart.style.display = 'none';
+
             } catch (err) {
                 alert("Erro na câmera: " + err.message);
             }
         }
 
+        function showResolution() {
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            const megapixels = ((w * h) / 1000000).toFixed(1);
+            const infoDiv = document.getElementById('cameraInfo');
+            document.getElementById('resInfo').textContent = `${w}×${h} (${megapixels}MP)`;
+            infoDiv.style.display = 'block';
+        }
+
+        async function toggleFlash() {
+            if (!stream) return;
+            const track = stream.getVideoTracks()[0];
+            const btnFlash = document.getElementById('btnFlash');
+            try {
+                flashOn = !flashOn;
+                await track.applyConstraints({ advanced: [{ torch: flashOn }] });
+                btnFlash.classList.toggle('active', flashOn);
+                btnFlash.textContent = flashOn ? '🔦 Lanterna ON' : '🔦 Lanterna';
+            } catch (e) {
+                flashOn = false;
+                btnFlash.classList.remove('active');
+            }
+        }
+
         function takePhoto() {
+            // Captura na resolução NATIVA do vídeo (sem reduzir)
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Qualidade JPEG alta (0.95) para preservar texto legível
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
             playClickSound();
             showPreview(dataUrl);
             stopCamera();
@@ -600,10 +728,26 @@ Se algum dado não estiver visível, preencha com "N/A".`;
 
         function stopCamera() {
             if (stream) {
+                // Desligar flash antes de parar
+                if (flashOn) {
+                    try {
+                        const track = stream.getVideoTracks()[0];
+                        track.applyConstraints({ advanced: [{ torch: false }] });
+                    } catch(e) {}
+                    flashOn = false;
+                    const btnFlash = document.getElementById('btnFlash');
+                    btnFlash.classList.remove('active');
+                    btnFlash.textContent = '🔦 Lanterna';
+                }
+
                 stream.getTracks().forEach(t => t.stop());
                 video.style.display = 'none';
                 btnCapture.style.display = 'none';
                 btnStart.style.display = 'block';
+
+                // Esconder controles de câmera
+                document.getElementById('cameraControls').classList.remove('visible');
+                document.getElementById('cameraInfo').style.display = 'none';
             }
         }
 
