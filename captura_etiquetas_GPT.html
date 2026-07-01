@@ -524,6 +524,8 @@
         <input type="text" id="edit_imei">
         <label>Nº Série</label>
         <input type="text" id="edit_sn">
+        <label>Material</label>
+        <input type="text" id="edit_material" placeholder="Nº do Material (se houver na etiqueta)">
         <label>Acessórios</label>
         <input type="text" id="edit_acessorios">
     </div>
@@ -605,7 +607,8 @@ Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório
 3. **Modelo:** Combine o Nome Comercial, cor e capacidade (ex: "iPhone 16, Black, 256GB" ou "EDGE 60 FUSION").
 4. **IMEI:** Liste todos (separe por barras se houver dois). Apenas números.
 5. **Número de Série:** Procure por S/N, MSN, SN. Apenas o código alfanumérico.
-6. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa, ferramenta de remoção de chip, manual). Separe por vírgula.
+6. **Material:** Procure na etiqueta por campos rotulados "Material", "Mat.", "Nº Material", "Material Number" ou "Matnr". Extraia apenas o número/código associado. Se não encontrar, preencha com "N/A".
+7. **Acessórios:** Liste apenas os itens físicos (carregador, cabo, fone, capa, ferramenta de remoção de chip, manual). Separe por vírgula.
 
 **Formato de Resposta (Sempre em Tabela Markdown):**
 
@@ -616,6 +619,7 @@ Sempre que eu enviar uma imagem, você deve ignorar qualquer texto introdutório
 | **Modelo** | ... |
 | **IMEI** | ... |
 | **Nº Série** | ... |
+| **Material** | ... |
 | **Acessórios** | ... |
 
 Se algum dado não estiver visível, preencha com "N/A".`;
@@ -870,7 +874,7 @@ Se algum dado não estiver visível, preencha com "N/A".`;
         // ═══════════════════════════════════════════
         function extractAndFillForm() {
             const rows = resultDiv.querySelectorAll('tr');
-            currentExtractedData = { tipo: "", marca: "", modelo: "", imei: "", sn: "", acessorios: "" };
+            currentExtractedData = { tipo: "", marca: "", modelo: "", imei: "", sn: "", material: "", acessorios: "" };
 
             rows.forEach(r => {
                 const c = r.querySelectorAll('td');
@@ -882,6 +886,7 @@ Se algum dado não estiver visível, preencha com "N/A".`;
                     else if (k.includes('modelo'))                   currentExtractedData.modelo = v;
                     else if (k.includes('imei'))                     currentExtractedData.imei = v;
                     else if (k.includes('série') || k.includes('sn')) currentExtractedData.sn = v;
+                    else if (k.includes('material'))                 currentExtractedData.material = v;
                     else if (k.includes('acessório') || k.includes('acessori')) currentExtractedData.acessorios = v;
                 }
             });
@@ -892,6 +897,7 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             document.getElementById('edit_modelo').value     = currentExtractedData.modelo;
             document.getElementById('edit_imei').value       = currentExtractedData.imei;
             document.getElementById('edit_sn').value         = currentExtractedData.sn;
+            document.getElementById('edit_material').value   = currentExtractedData.material;
             document.getElementById('edit_acessorios').value = currentExtractedData.acessorios;
         }
 
@@ -902,6 +908,7 @@ Se algum dado não estiver visível, preencha com "N/A".`;
                 modelo:     document.getElementById('edit_modelo').value.trim(),
                 imei:       document.getElementById('edit_imei').value.trim(),
                 sn:         document.getElementById('edit_sn').value.trim(),
+                material:   document.getElementById('edit_material').value.trim(),
                 acessorios: document.getElementById('edit_acessorios').value.trim()
             };
         }
