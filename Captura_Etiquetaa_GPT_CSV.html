@@ -594,7 +594,7 @@
     <footer class="app-footer">
         Scanner de Inventário UFMA &bull; OpenAI GPT Vision &bull; CSV Local<br>
         <span style="display: inline-block; margin-top: 6px; padding: 2px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 0.85em; color: var(--text-muted);">
-            🚀 Build: <strong>2026.07.01 - 11:24h</strong>
+            🚀 Build: <strong>2026.07.01 - 11:38h</strong>
         </span>
     </footer>
 
@@ -853,8 +853,12 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             stopCamera();
 
             const base64Full = dataUrl.split(',')[1];
-            // Guardar a imagem COMPLETA para o CSV (sem reduzir)
-            capturedImageBase64 = base64Full;
+            
+            // Otimizar a imagem especificamente para caber na célula do Excel (máx 32.767 chars)
+            optimizeImageForExcel(dataUrl, optimizedBase64 => {
+                capturedImageBase64 = optimizedBase64;
+            });
+            
             processImageBase64(base64Full);
         }
 
@@ -917,11 +921,85 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             reader.onload = e => {
                 showPreview(e.target.result);
                 const base64Full = e.target.result.split(',')[1];
-                // Guardar a imagem COMPLETA (sem reduzir)
-                capturedImageBase64 = base64Full;
+                
+                // Otimizar a imagem especificamente para caber na célula do Excel (máx 32.767 chars)
+                optimizeImageForExcel(e.target.result, optimizedBase64 => {
+                    capturedImageBase64 = optimizedBase64;
+                });
+                
                 processImageBase64(base64Full);
             };
             reader.readAsDataURL(file);
+        }
+
+        // Converte para tons de cinza com alto contraste e reduz a qualidade até caber no limite de 32KB do Excel
+        function optimizeImageForExcel(dataUrl, callback) {
+            const img = new Image();
+            img.onload = () => {
+                const tempCanvas = document.createElement('canvas');
+                const ctx = tempCanvas.getContext('2d');
+
+                // Mantém proporção com largura máxima de 800px (excelente para leitura de textos pequenos)
+                const MAX_WIDTH = 800;
+                let w = img.width, h = img.height;
+                if (w > MAX_WIDTH) {
+                    h = Math.round(h * (MAX_WIDTH / w));
+                    w = MAX_WIDTH;
+                }
+                tempCanvas.width = w;
+                tempCanvas.height = h;
+
+                ctx.drawImage(img, 0, 0, w, h);
+
+                // Converter para escala de cinza e aplicar ganho de contraste para texto
+                const imgData = ctx.getImageData(0, 0, w, h);
+                const data = imgData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i], g = data[i+1], b = data[i+2];
+                    // Luminância padrão
+                    const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                    
+                    // Curva de contraste adaptativa (escurece texto, clareia fundo)
+                    let contrastGray = gray;
+                    if (gray < 110) {
+                        contrastGray = Math.max(0, gray - 40); // Mais escuro para letras
+                    } else if (gray > 140) {
+                        contrastGray = Math.min(255, gray + 40); // Mais claro para o fundo
+                    }
+
+                    data[i]   = contrastGray;
+                    data[i+1] = contrastGray;
+                    data[i+2] = contrastGray;
+                }
+                ctx.putImageData(imgData, 0, 0);
+
+                // Compressão iterativa para garantir limite de 32.000 caracteres base64
+                let quality = 0.65;
+                let base64 = '';
+                let attempts = 0;
+                
+                do {
+                    base64 = tempCanvas.toDataURL('image/jpeg', quality).split(',')[1];
+                    if (base64.length <= 32000) {
+                        break;
+                    }
+                    quality -= 0.10; // Reduz qualidade gradualmente
+                    attempts++;
+                } while (quality > 0.15 && attempts < 5);
+
+                // Fallback extremo se ainda passar de 32.000 (redimensiona pela metade)
+                if (base64.length > 32000) {
+                    const canvasFallback = document.createElement('canvas');
+                    canvasFallback.width = w / 2;
+                    canvasFallback.height = h / 2;
+                    const ctxFb = canvasFallback.getContext('2d');
+                    ctxFb.drawImage(tempCanvas, 0, 0, canvasFallback.width, canvasFallback.height);
+                    base64 = canvasFallback.toDataURL('image/jpeg', 0.4).split(',')[1];
+                }
+
+                callback(base64);
+            };
+            img.src = dataUrl;
         }
 
         function showPreview(dataUrl) {
