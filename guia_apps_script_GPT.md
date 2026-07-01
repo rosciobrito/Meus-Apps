@@ -1,42 +1,68 @@
 # Novo Código Apps Script — doPost com Salvamento de Imagem
 
-> **Este código deve substituir o arquivo atual no Google Apps Script.**
-> Ele inclui uma função `autorizarPermissoes()` específica para resolver o erro de permissão do Google Drive!
+> **Este código resolve DEFINITIVAMENTE o erro `Você não tem permissão para chamar DriveApp.getFileById`.**
 
-## 🚨 COMO CORRIGIR O ERRO DE PERMISSÃO DO DRIVE (Passo a Passo)
+## 🚨 POR QUE O ERRO ACONTECE E COMO RESOLVER EM 1 MINUTO
 
-Quando adicionamos o comando `DriveApp` para salvar imagens, o Google exige que você autorize o acesso ao seu Google Drive **manualmente no editor** antes que o aplicativo consiga enviar fotos.
+O Google Apps Script bloqueia a função `DriveApp.getFileById` em chamadas externas se a autorização exata desse método não for realizada no editor ou se a implantação estiver rodando uma versão antiga em cache.
 
-Faça exatamente o seguinte no editor do Apps Script:
-
-1. Abra a planilha e vá em **Extensões → Apps Script**.
-2. Cole todo o código abaixo no seu arquivo `Código.gs` e clique em **Salvar** (💾).
-3. No painel superior, onde tem um menu suspenso ao lado do botão **▶ Executar**, selecione a função **`autorizarPermissoes`**.
-4. Clique no botão **▶ Executar**.
-5. Vai aparecer uma janela dizendo **"Autorização necessária"**:
-   * Clique em **Revisar permissões**.
-   * Escolha a sua conta do Google.
-   * Se aparecer um aviso *"O Google não verificou este app"*, clique em **Avançado** (texto pequeno) e depois em **Acessar Projeto sem título (não seguro)**.
-   * Clique em **Permitir**.
-6. Agora vá em **Implantar → Gerenciar implantações**.
-7. Clique no ícone de **lápis (editar)** na implantação ativa.
-8. Em "Versão", selecione **"Nova versão"** e clique em **Implantar**.
-
-Pronto! A permissão para o Google Drive estará concedida e as imagens serão salvas perfeitamente sem erros!
+Temos **2 formas** de resolver isso. Escolha a **MÉTODO 1** (mais rápido) ou o **MÉTODO 2** (definitivo a prova de falhas):
 
 ---
 
-## Código Completo para Colar no Apps Script
+### MÉTODO 1: Rodar a Nova Função de Autorização e Gerar Nova Versão
+
+1. No Google Sheets, vá em **Extensões → Apps Script**.
+2. Substitua todo o código lá dentro pelo **Código Completo** abaixo e clique em **Salvar** (💾).
+3. No menu suspenso ao lado do botão **▶ Executar**, selecione a função **`autorizarPermissoes`**.
+4. Clique em **▶ Executar**.
+5. Na janela que abrir:
+   * Clique em **Revisar permissões** → Escolha sua conta.
+   * Clique em **Avançado** (texto cinza) → **Acessar Projeto sem título (não seguro)** → **Permitir**.
+6. ⚠️ **O PASSO MAIS IMPORTANTE:**
+   * Vá em **Implantar → Gerenciar implantações**.
+   * Clique no ícone de **lápis (✏️ editar)** na implantação ativa.
+   * No campo **Versão**, clique na setinha e mude de *(versão 1...)* para **Nova versão**! *(Se você não mudar para "Nova versão", o Google continuará rodando o código velho sem permissão)*.
+   * Clique em **Implantar**.
+
+---
+
+### MÉTODO 2 (Se o Método 1 não resolver): Forçar as Permissões no Manifesto
+
+Se você já gerou "Nova versão" e o erro insistir, vamos dizer diretamente ao Google para liberar o Drive:
+
+1. No painel esquerdo do Apps Script, clique em **⚙️ Configurações do projeto**.
+2. Marque a caixinha: **"Mostrar arquivo de manifesto 'appsscript.json' no editor"**.
+3. Clique em **⟨⟩ Editor** no menu esquerdo. Agora você verá o arquivo `appsscript.json` na lista.
+4. Clique em `appsscript.json` e substitua tudo por isto:
+```json
+{
+  "timeZone": "America/Sao_Paulo",
+  "dependencies": {},
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+  ]
+}
+```
+5. Clique em **Salvar** (💾).
+6. Rode a função `autorizarPermissoes` novamente e gere uma **Nova versão** em **Gerenciar implantações**.
+
+---
+
+## Código Completo para Colar no arquivo Código.gs
 
 ```javascript
 /**
- * ⚠️ RODE ESTA FUNÇÃO UMA VEZ NO EDITOR PARA AUTORIZAR O GOOGLE DRIVE!
- * Selecione "autorizarPermissoes" no topo e clique em ▶ Executar.
+ * ⚠️ RODE ESTA FUNÇÃO UMA VEZ NO EDITOR PARA FORÇAR A LIBERAÇÃO DO DRIVE!
  */
 function autorizarPermissoes() {
-  DriveApp.getRootFolder();
-  SpreadsheetApp.getActiveSpreadsheet();
-  Logger.log("✅ Permissões de Planilha e Google Drive autorizadas com sucesso!");
+  var planilhaId = SpreadsheetApp.getActiveSpreadsheet().getId();
+  var arquivo = DriveApp.getFileById(planilhaId);
+  var pastaPai = arquivo.getParents().next();
+  Logger.log("✅ Permissão TOTAL ao Drive liberada com sucesso! Pasta da planilha: " + pastaPai.getName());
 }
 
 function doPost(e) {
