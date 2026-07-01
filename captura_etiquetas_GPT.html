@@ -593,6 +593,7 @@
         let stream;
         let sessionCount = 0;
         let currentExtractedData = {};
+        let capturedImageBase64 = null;  // Imagem capturada para salvar no Drive
 
         // ═══════════════════════════════════════════
         // 3. PROMPT PARA O GPT
@@ -727,7 +728,13 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             playClickSound();
             showPreview(dataUrl);
             stopCamera();
-            processImageBase64(dataUrl.split(',')[1]);
+
+            const base64Full = dataUrl.split(',')[1];
+            // Guardar versão reduzida para salvar no Drive
+            resizeImageForStorage(dataUrl, resized => {
+                capturedImageBase64 = resized;
+            });
+            processImageBase64(base64Full);
         }
 
         function stopCamera() {
@@ -791,7 +798,12 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             const reader = new FileReader();
             reader.onload = e => {
                 showPreview(e.target.result);
-                processImageBase64(e.target.result.split(',')[1]);
+                const base64Full = e.target.result.split(',')[1];
+                // Guardar versão reduzida para salvar no Drive
+                resizeImageForStorage(e.target.result, resized => {
+                    capturedImageBase64 = resized;
+                });
+                processImageBase64(base64Full);
             };
             reader.readAsDataURL(file);
         }
@@ -799,6 +811,25 @@ Se algum dado não estiver visível, preencha com "N/A".`;
         function showPreview(dataUrl) {
             preview.src = dataUrl;
             preview.style.display = 'block';
+        }
+
+        // Redimensiona imagem para ~1200px de largura (economia para salvar no Drive)
+        function resizeImageForStorage(dataUrl, callback) {
+            const img = new Image();
+            img.onload = () => {
+                const MAX_WIDTH = 1200;
+                let w = img.width, h = img.height;
+                if (w > MAX_WIDTH) {
+                    h = Math.round(h * (MAX_WIDTH / w));
+                    w = MAX_WIDTH;
+                }
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = w;
+                tempCanvas.height = h;
+                tempCanvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                callback(tempCanvas.toDataURL('image/jpeg', 0.8).split(',')[1]);
+            };
+            img.src = dataUrl;
         }
 
         // ═══════════════════════════════════════════
@@ -924,8 +955,13 @@ Se algum dado não estiver visível, preencha com "N/A".`;
             const data = getEditedData();
             const payload = { ...data, _token: token };
 
+            // Incluir imagem capturada (versão reduzida para o Drive)
+            if (capturedImageBase64) {
+                payload._imagem = capturedImageBase64;
+            }
+
             btnSave.disabled = true;
-            btnSave.textContent = "⏳ Enviando...";
+            btnSave.textContent = "⏳ Enviando (com imagem)...";
 
             try {
                 await fetch(webhookUrl, {
